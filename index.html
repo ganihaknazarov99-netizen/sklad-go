@@ -1,0 +1,225 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
+<title>Sklad Go</title>
+<style>
+:root{--bg:#f2f5f7;--card:#fff;--tx:#10161d;--mu:#6b7683;--ac:#0d9488;--in:#16a34a;--out:#ea580c;--bd:#e1e6eb;--warn:#d97706;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0f13;--card:#151b21;--tx:#eef2f5;--mu:#93a0ad;--ac:#2dd4bf;--in:#4ade80;--out:#fb923c;--bd:#252e38;--warn:#fbbf24}}
+:root[data-theme="dark"]{--bg:#0b0f13;--card:#151b21;--tx:#eef2f5;--mu:#93a0ad;--ac:#2dd4bf;--in:#4ade80;--out:#fb923c;--bd:#252e38;--warn:#fbbf24}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:90px}
+main{max-width:640px;margin:0 auto;padding:12px}
+h1{font-size:22px;margin:2px 0 12px;display:flex;justify-content:space-between;align-items:center}
+h1 span{color:var(--ac)}
+button,input,select{font:inherit;color:var(--tx)}
+input,select{width:100%;padding:12px;border:1px solid var(--bd);border-radius:12px;background:var(--card);margin-bottom:8px}
+button{cursor:pointer}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:10px 12px}
+.stat b{display:block;font-size:20px}.stat small{color:var(--mu)}
+.chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px}
+.chip{flex:none;padding:8px 14px;border-radius:99px;border:1px solid var(--bd);background:var(--card)}
+.chip.on{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:10px 10px 10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.info{flex:1;min-width:0}.info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+small{color:var(--mu);display:block}
+.ctl{display:flex;align-items:center;gap:4px}
+.ctl button{width:44px;height:44px;border-radius:12px;border:0;font-size:24px;font-weight:700;color:#fff}
+.ctl .m{background:var(--out)}.ctl .p{background:var(--in)}.ctl .m:disabled{opacity:.3}
+.q{min-width:38px;text-align:center;font-size:22px;font-weight:800}.q.low{color:var(--warn)}
+.fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:32px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{border:0;background:none;padding:10px;color:var(--mu);font-size:13px}
+nav button b{display:flex;justify-content:center;align-items:center;height:28px;margin-bottom:1px}nav button.on{color:var(--ac);font-weight:700}
+.empty{color:var(--mu);text-align:center;padding:36px 10px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:9}
+.sheet{background:var(--bg);width:100%;max-width:640px;border-radius:20px 20px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom,0px));max-height:92vh;overflow-y:auto}
+.sheet h2{margin:0 0 2px;font-size:19px;padding-right:46px}
+.xw{position:sticky;top:-6px;height:0;text-align:right;z-index:5}
+.xb{width:42px;height:42px;border-radius:50%;border:0;background:var(--card);color:var(--tx);box-shadow:0 2px 8px rgba(0,0,0,.25);font-size:18px;font-weight:700;margin-top:-6px}
+.step{display:grid;grid-template-columns:56px 1fr 56px;gap:8px;margin:12px 0 8px}
+.step button{border:1px solid var(--bd);background:var(--card);border-radius:12px;font-size:26px}
+.step input{text-align:center;font-size:24px;font-weight:700;margin:0}
+.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+.nums button{padding:9px;border:1px solid var(--bd);background:var(--card);border-radius:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.go{padding:15px;border:0;border-radius:14px;color:#fff;font-weight:700;font-size:17px}
+.go.in{background:var(--in)}.go.out{background:var(--out)}.go.ac{background:var(--ac);width:100%}
+.tools{display:flex;flex-wrap:wrap;justify-content:space-between;margin-top:10px}
+.tools button,.link{background:none;border:0;color:var(--ac);padding:8px 4px;font-size:15px}
+.tools .del{color:var(--out)}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.row>div{min-width:0}
+input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:none;display:block;height:48px;text-align:left}
+.seg2{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:12px}
+.seg2 button{border:0;background:none;padding:10px;border-radius:9px;font-weight:600;color:var(--mu)}
+.seg2 button.on{background:var(--ac);color:#fff}
+.bdg{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.5px;padding:6px 12px;border-radius:99px;margin:6px 0}
+.bdg.g{background:rgba(22,163,74,.16);color:var(--in)}.bdg.r{background:rgba(234,88,12,.16);color:var(--out)}
+.big{font-size:38px;font-weight:800;margin:2px 0 10px}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:12px 6px;margin-bottom:12px}
+.acts button{background:none;border:0;font-weight:600;font-size:12px}
+.cr{display:flex;width:52px;height:52px;border-radius:50%;align-items:center;justify-content:center;margin:0 auto 6px;font-style:normal;font-size:22px;background:var(--bg)}
+.cr.s{width:40px;height:40px;font-size:18px;margin:0;flex:none}
+.day{font-weight:700;margin:14px 0 6px;display:flex;justify-content:space-between}
+.day small{display:inline}
+.log{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
+.i{color:var(--in);font-weight:700}.o{color:var(--out);font-weight:700}
+.toast{position:fixed;left:12px;right:12px;bottom:calc(148px + env(safe-area-inset-bottom,0px));max-width:616px;margin:0 auto;background:#10161d;color:#fff;padding:12px 14px;border-radius:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;z-index:20}
+.toast button{background:none;border:0;color:#5eead4;font-weight:700;font-size:15px}
+.wrap{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.lbl{font-size:13px;color:var(--mu);margin:8px 0 5px}
+.chip i{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid var(--mu);margin-right:6px;vertical-align:-2px}
+.qg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.qg label{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:0 10px}
+.gh{grid-column:1/-1;font-weight:700;margin-top:4px}
+.qg label b{min-width:46px}.qg input{border:0;margin:0;padding:12px 0;background:transparent}
+.stat.w{grid-column:1/-1}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.g2 button{padding:13px 8px;border-radius:12px;border:2px solid var(--bd);background:var(--card);font-weight:600}
+.amt{text-align:right;font-size:18px;font-weight:700}.amt small{font-weight:400}
+.late{color:var(--out)!important}
+.nb{background:var(--out);color:#fff;border-radius:99px;font-size:11px;padding:1px 6px;margin-left:4px;font-weight:700}
+.bm{max-width:88%;padding:10px 12px;border-radius:14px;margin-bottom:8px;white-space:pre-wrap;word-wrap:break-word}
+.bm.u{margin-left:auto;background:var(--ac);color:#fff}.bm.b{background:var(--card);border:1px solid var(--bd)}
+.prop{background:var(--card);border:2px solid var(--ac);border-radius:14px;padding:10px 12px;margin-bottom:8px;max-width:94%}
+.chatbar{position:sticky;bottom:74px;display:flex;gap:8px;background:var(--bg);padding:8px 0}
+.chatbar input{margin:0}.chatbar button{width:54px;border:0;border-radius:12px;background:var(--ac);color:#fff;font-size:20px}
+.fold{border-color:var(--ac)}
+.sub{margin:-2px 0 10px 8px;padding-left:10px;border-left:3px solid var(--bd)}
+.card.sm{padding:6px 8px 6px 12px}
+.calc{position:absolute;right:6px;top:4px;width:44px;height:44px;border:0;background:none;font-size:22px}
+.calcg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.calcg button{padding:12px 0;border:0;border-radius:10px;background:var(--bg);font-size:18px;font-weight:600}
+.calcg .op{background:var(--ac);color:#fff}
+.q[data-qs]{cursor:pointer;text-decoration:underline dotted;text-underline-offset:5px}
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:12px}
+.panel h3{margin:0 0 8px;font-size:16px}
+.bar{height:8px;border-radius:99px;background:var(--bd);overflow:hidden;margin-top:4px}.bar i{display:block;height:100%;background:var(--ac)}
+.stat.s3{padding:8px 10px}.stat.s3 b{font-size:17px}
+.authbox{max-width:420px;margin:0 auto;padding:44px 16px}
+.logo{width:34px;height:34px;border-radius:9px;display:block}
+.authbox .brand{text-align:center;margin:0 0 10px}.authbox .brand img{width:92px;height:92px;border-radius:22px;box-shadow:0 6px 18px rgba(13,148,136,.3)}
+.authbox h1{font-size:30px;margin:0 0 6px;display:block}.authbox h1 span{color:var(--ac)}
+.authbox p{color:var(--mu);margin:6px 0 16px}
+.authbox .err{color:var(--out);min-height:22px;margin-bottom:8px}
+.authbox button.go{margin-bottom:6px}
+.authbox label{display:block;font-size:13px;color:var(--mu);margin:4px 0 2px}
+.ico{display:inline-block;line-height:0}.ico svg{width:1.15em;height:1.15em;vertical-align:-.22em}
+.demobar{max-width:640px;margin:0 auto;padding:8px 12px 0;display:flex;align-items:baseline;gap:8px;justify-content:space-between}
+.demobar span{font-size:12px;color:var(--mu);min-width:0}
+.demobar b{color:var(--ac)}
+.demobar button{flex:none;background:none;border:1px solid var(--bd);border-radius:99px;color:var(--mu);font-size:12px;padding:4px 10px}
+</style>
+
+<div class="demobar"><span><b>Демо</b> · данные только в этом браузере</span><button id="demoreset" type="button">Сбросить</button></div>
+<div id="auth" style="display:none"></div>
+<main id="app"></main><div id="tt"></div><div id="ov"></div>
+<button class="fab" id="fab" style="display:none">＋</button>
+<nav id="nav"></nav>
+
+<script>
+/* Демо-данные магазина одежды (сомони). Записываются в localStorage до загрузки app.js,
+   потому что программа читает их при старте. Если пользователь уже что-то менял — не трогаем. */
+(function () {
+  var SEED = 'skladgo.demo.v1';
+  if (location.search.indexOf('reset') > -1) { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('skladgo.') === 0) localStorage.removeItem(k); }); } catch (e) {} }
+  try { if (localStorage.getItem(SEED)) return; } catch (e) { return; }
+
+  var DAY = 864e5, now = Date.now(), n = 0;
+  var uid = function () { return 'd' + (++n) + Date.now().toString(36); };
+  function item(name, cat, color, size, price, qty) {
+    return { id: uid(), name: name, cat: cat, size: size, color: color, price: price, qty: qty, ar: qty <= 0, u: 'шт', pk: 1, pb: 'pcs', ab: 'Ганӣ', ad: now - 30 * DAY };
+  }
+  var items = [
+    item('Футболка хлопок', 'Одежда', 'Чёрный', 'M', 85, 14),
+    item('Футболка хлопок', 'Одежда', 'Чёрный', 'L', 85, 9),
+    item('Футболка хлопок', 'Одежда', 'Белый', 'L', 85, 2),
+    item('Джинсы классика', 'Одежда', 'Синий', '32', 220, 6),
+    item('Джинсы классика', 'Одежда', 'Синий', '34', 220, 3),
+    item('Куртка зимняя', 'Одежда', 'Чёрный', 'L', 450, 4),
+    item('Куртка зимняя', 'Одежда', 'Серый', 'XL', 450, 0),
+    item('Рубашка офисная', 'Одежда', 'Белый', 'M', 160, 11),
+    item('Носки упаковка', 'Аксессуары', '', '', 15, 48),
+    item('Ремень кожаный', 'Аксессуары', 'Коричневый', '', 60, 7),
+    item('Кепка', 'Аксессуары', 'Чёрный', '', 40, 1),
+    item('Порошок стиральный', 'Хозтовары', '', '', 45, 22),
+    item('Шампунь 400мл', 'Хозтовары', '', '', 28, 16)
+  ];
+  var lab = function (i) { return i.name + (i.size ? ' · ' + i.size : '') + (i.color ? ' · ' + i.color : ''); };
+  var log = [];
+  function op(i, type, qty, daysAgo, hour, by, note) {
+    log.push({ by: by, t: now - daysAgo * DAY + hour * 36e5, type: type, id: items[i].id, name: lab(items[i]), qty: qty, sum: items[i].price * qty, note: note || '' });
+  }
+  op(0, 'out', 3, 0, -2, 'Алишер'); op(3, 'out', 1, 0, -4, 'Ганӣ'); op(8, 'out', 6, 0, -5, 'Алишер');
+  op(11, 'out', 2, 0, -7, 'Ганӣ'); op(1, 'out', 2, 1, -3, 'Алишер'); op(5, 'out', 1, 1, -6, 'Ганӣ');
+  op(7, 'out', 4, 2, -4, 'Алишер'); op(0, 'in', 20, 3, -8, 'Ганӣ', 'Поставка с базара');
+  op(3, 'in', 10, 3, -8, 'Ганӣ', 'Поставка с базара'); op(9, 'out', 2, 4, -5, 'Алишер');
+  op(12, 'out', 5, 5, -6, 'Ганӣ'); op(2, 'out', 7, 6, -4, 'Алишер');
+  op(5, 'in', 6, 8, -9, 'Ганӣ', 'Зимний завоз'); op(10, 'out', 3, 9, -5, 'Алишер');
+  log.sort(function (a, b) { return b.t - a.t; });
+
+  var people = [
+    { id: uid(), name: 'Фируз', phone: '+992901112233' },
+    { id: uid(), name: 'Мадина', phone: '+992937778899' },
+    { id: uid(), name: 'Сафар', phone: '+992505554433' },
+    { id: uid(), name: 'Поставщик Рахим', phone: '+992918889900' }
+  ];
+  var ops = [], dstr = function (d) { return new Date(now + d * DAY).toISOString().slice(0, 10); };
+  function debt(p, type, amt, daysAgo, note, due) {
+    ops.push({ id: uid(), pid: people[p].id, type: type, amt: amt, t: now - daysAgo * DAY, due: due || '', note: note, calc: '', by: 'Ганӣ', at: now - daysAgo * DAY });
+  }
+  debt(0, 'give', 450, 12, 'Куртка зимняя', dstr(-4));
+  debt(0, 'get', 150, 5, 'Частично вернул');
+  debt(1, 'give', 220, 3, 'Джинсы', dstr(7));
+  debt(2, 'give', 85, 1, 'Футболка', dstr(14));
+  debt(2, 'get', 85, 0, 'Вернул полностью');
+  debt(3, 'get', 1200, 6, 'Товар на реализацию', dstr(10));
+
+  try {
+    localStorage.setItem('skladgo.v1', JSON.stringify({ items: items, log: log, cats: ['Одежда', 'Аксессуары', 'Хозтовары', 'Другое'], biz: 'Магазин Ганӣ' }));
+    localStorage.setItem('skladgo.debts', JSON.stringify({ people: people, ops: ops }));
+    localStorage.setItem('skladgo.me', JSON.stringify({ name: 'Ганӣ', phone: '+992 90 000 00 01', mail: 'demo@sklad.go' }));
+    localStorage.setItem(SEED, '1');
+  } catch (e) {}
+})();
+</script>
+
+<script src="merge.js"></script>
+<script src="app.js"></script>
+
+<script>
+/* Демо-режим: владелец, команда и лента живут в памяти страницы — сервера здесь нет. */
+(function () {
+  isOwn = true;
+  myId = 'demo-owner';
+  staff = [
+    { _id: 'demo-owner', uid: 'demo-owner', name: 'Ганӣ', phone: '+992 90 000 00 01', mail: 'demo@sklad.go', owner: true, status: 'active', t: Date.now() },
+    { _id: 'demo-s1', uid: 'demo-s1', name: 'Алишер', phone: '+992 90 000 00 02', mail: 'alisher@sklad.go', owner: false, status: 'active', t: Date.now() },
+    { _id: 'demo-s2', uid: 'demo-s2', name: 'Нигина', phone: '+992 90 000 00 03', mail: 'nigina@sklad.go', owner: false, status: 'pending', t: Date.now() }
+  ];
+  var t0 = Date.now();
+  actList = [
+    { t: t0 - 36e5, by: 'Алишер', txt: 'записал долг: Мадина · 220 сом' },
+    { t: t0 - 72e5, by: 'Алишер', txt: 'продал 3 × Футболка хлопок · M · Чёрный' },
+    { t: t0 - 108e5, by: 'Ганӣ', txt: 'добавил товар «Куртка зимняя · L · Чёрный»' }
+  ];
+  // В демо подтверждение и блокировка сотрудника меняют список на месте, без сервера.
+  setSt = function (id, st) {
+    staff.forEach(function (x) { if (x._id === id) x.status = st; });
+    logAct(st === 'active' ? 'разрешил доступ сотруднику' : 'заблокировал сотрудника');
+    toast(st === 'active' ? '✓ Доступ разрешён' : '⛔ Доступ закрыт');
+    render();
+  };
+  // Лента изменений в демо пополняется локально (на сервере это делает сам сервер).
+  logAct = function (txt) { actList.unshift({ t: Date.now(), by: ME ? ME.name : '', txt: txt }); };
+
+  document.getElementById('demoreset').onclick = function () {
+    try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('skladgo.') === 0) localStorage.removeItem(k); }); } catch (e) {}
+    location.reload();
+  };
+
+  render();
+  setTimeout(function () { toast('Это демо: меняйте остатки и долги — всё сохранится в браузере', true); }, 400);
+})();
+</script>
+
+</body></html>
