@@ -1,0 +1,15 @@
+[Unit]
+Description=Sklad Go
+After=network.target
+
+[Service]
+User=skladgo
+WorkingDirectory=/opt/skladgo/backend
+ExecStart=/usr/bin/node --no-warnings server.js
+EnvironmentFile=/opt/skladgo/backend/.env
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

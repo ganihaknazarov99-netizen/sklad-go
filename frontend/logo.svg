@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Sklad Go">
+  <rect width="512" height="512" rx="112" fill="#0d9488"/>
+  <rect x="84" y="124" width="264" height="68" rx="18" fill="#ffffff"/>
+  <rect x="108" y="184" width="216" height="176" rx="18" fill="#ffffff"/>
+  <rect x="108" y="184" width="216" height="10" fill="#0d9488" opacity=".22"/>
+  <rect x="180" y="232" width="72" height="20" rx="10" fill="#0d9488"/>
+  <circle cx="356" cy="356" r="76" fill="#f59e0b" stroke="#0d9488" stroke-width="16"/>
+  <path d="M328 356h56M364 332l24 24-24 24" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

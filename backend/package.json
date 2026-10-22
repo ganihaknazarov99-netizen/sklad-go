@@ -1,0 +1,11 @@
+{
+  "name": "sklad-go-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sklad Go: сервер (авторизация, роли, база SQLite, реальное время). Без внешних зависимостей.",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test --no-warnings"
+  }
+}

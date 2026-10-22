@@ -1,0 +1,19 @@
+# База SQLite сервера — в репозитории ей не место, это живые данные магазина
+backend/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Настройки с паролями и ключами (образец — в backend/.env.example)
+.env
+backend/.env
+
+# Тестовые учётные записи для локального запуска
+TEST-OWNER.txt
+backend/TEST-OWNER.txt
+
+# Мусор редакторов и систем
+*.bak
+node_modules/
+.DS_Store
+Thumbs.db
