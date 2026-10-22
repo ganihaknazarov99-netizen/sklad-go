@@ -583,8 +583,8 @@ function wstats(){
   $('app').innerHTML=h;bindSeg();bindChips('wsm',function(v){wsMet=v;wstats()});bindChips('wsp',function(v){wsPer=v;wstats()});
 }
 function trashHtml(){
-  var T=(S.trash||[]).slice().reverse();if(!T.length)return '';
-  return T('<div class="lbl" style="margin-top:16px">🗑 Удалённые товары (')+T.length+')</div>'+T.map(function(e){return '<div class="log"><div><b>'+esc(lab(e.item))+T('</b><small>Удалил: ')+esc(e.by||'—')+' · '+dstr(e.t)+T(' · было ')+e.item.qty+T(' шт</small></div><button class="link" data-rt="')+e.id+T('">↩ Восстановить</button></div>')}).join('');
+  var L=(S.trash||[]).slice().reverse();if(!L.length)return '';
+  return T('<div class="lbl" style="margin-top:16px">🗑 Удалённые товары (')+L.length+')</div>'+L.map(function(e){return '<div class="log"><div><b>'+esc(lab(e.item))+T('</b><small>Удалил: ')+esc(e.by||'—')+' · '+dstr(e.t)+T(' · было ')+e.item.qty+T(' шт</small></div><button class="link" data-rt="')+e.id+T('">↩ Восстановить</button></div>')}).join('');
 }
 function restItem(tid){
   var e=(S.trash||[]).filter(function(x){return x.id===tid})[0];if(!e)return;
@@ -865,8 +865,8 @@ function dpeopleHtml(){
   return h;
 }
 function dtrashHtml(){
-  var T=(D.trash||[]).slice().reverse();if(!T.length)return '';
-  return T('<div class="lbl" style="margin-top:16px">🗑 Удалённые записи (')+T.length+')</div>'+T.map(function(e){
+  var L=(D.trash||[]).slice().reverse();if(!L.length)return '';
+  return T('<div class="lbl" style="margin-top:16px">🗑 Удалённые записи (')+L.length+')</div>'+L.map(function(e){
     var what=e.k==='op'?DT[e.op.type][0]+' · '+money(e.op.amt):T('Человек удалён вместе с ')+e.ops.length+T(' записями');
     return '<div class="log"><div><b>'+esc(e.pn)+'</b><small>'+what+T('<br>Удалил: ')+esc(e.by||'—')+' · '+dshort(e.t)+'</small></div><button class="link" data-rs="'+e.id+T('">↩ Восстановить</button></div>')}).join('');
 }
