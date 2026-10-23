@@ -417,7 +417,9 @@ function form(it,pre){
   h+='<div class="lbl">'+(isNew?T('Цвета — нажмите нужные (можно несколько)'):T('Цвет'))+'</div><div class="wrap" id="cw">'+COL.map(function(c){return '<div class="chip" data-col="'+c[0]+'"><i style="background:'+c[1]+'"></i>'+c[0]+'</div>'}).join('')+'</div><input id="cl" placeholder="'+(isNew?T('Другие цвета через запятую'):T('Или впишите свой цвет'))+'" value="'+(isNew?'':esc(d.color||''))+'">';
   if(isNew)h+=T('<div class="lbl">Размеры — нажмите нужные</div><div class="wrap" id="sw">')+SC.map(function(x){return '<div class="chip" data-s="'+x+'">'+x+'</div>'}).join('')+T('</div><input id="sz" placeholder="Или впишите: L, XL, XXL · M-XXXL · L-2XL"><div class="lbl">Сколько штук</div><input id="qa" type="number" inputmode="numeric" placeholder="Одинаково на все цвета и размеры"><div class="qg" id="qg"></div>');
   else h+=T('<input id="sz" placeholder="Размер" value="')+esc(it.size)+'">';
-  h+=unitBlock('f',d.u,d.pk,d.pb)+'<input id="pr" type="number" inputmode="decimal" placeholder="'+priceHint(d.u==='пачка'?'пачка':'шт',d.pb)+'" value="'+(d.price||'')+T('"><button class="go ac" id="sv">Сохранить</button>');
+  h+=unitBlock('f',d.u,d.pk,d.pb)+'<input id="pr" type="number" inputmode="decimal" placeholder="'+priceHint(d.u==='пачка'?'пачка':'шт',d.pb)+'" value="'+(d.price||'')+'">';
+  if(isOwn)h+=T('<div class="lbl">Закупочная цена — её видит только владелец</div>')+'<input id="cp" type="number" inputmode="decimal" placeholder="'+T('Почём купили, за 1 шт')+'" value="'+(d.cp||'')+'">';
+  h+=T('<button class="go ac" id="sv">Сохранить</button>');
   open(h);
   bindUnit('f',function(){var r=readUnit('f');$('pr').placeholder=priceHint(r.u,r.pb)});
   $('bcs').onclick=function(){
@@ -455,15 +457,15 @@ function form(it,pre){
   }
   $('sv').onclick=function(){
     var nm=$('nm').value.trim();if(!nm){toast(T('⚠️ Введите название товара'));$('nm').style.borderColor='var(--out)';$('nm').focus();return}
-    var c=$('ct').value,pr=parseFloat($('pr').value)||0;
-    if(it){var nb=bcNorm($('bcv').value);if(nb!==bcNorm(it.bc||'')&&!setBc(it,nb,true))return;it.name=nm;it.cat=c;it.color=$('cl').value.trim();it.price=pr;it.size=nz($('sz').value.trim());var ru=readUnit('f');it.u=ru.u;it.pk=ru.pk;it.pb=ru.pb;it.eb=ME?ME.name:'';it.ed=Date.now();save();close();logAct('изменил товар «'+nm+'»');render();return}
+    var c=$('ct').value,pr=parseFloat($('pr').value)||0,cpEl=$('cp'),cp=cpEl?(parseFloat(cpEl.value)||0):null;
+    if(it){var nb=bcNorm($('bcv').value);if(nb!==bcNorm(it.bc||'')&&!setBc(it,nb,true))return;it.name=nm;it.cat=c;it.color=$('cl').value.trim();it.price=pr;if(cp!==null)it.cp=cp;it.size=nz($('sz').value.trim());var ru=readUnit('f');it.u=ru.u;it.pk=ru.pk;it.pb=ru.pb;it.eb=ME?ME.name:'';it.ed=Date.now();save();close();logAct('изменил товар «'+nm+'»');render();return}
     var bcv=bcNorm($('bcv').value),K0=combos();if(bcv&&isSingle(K0)){var dupb=byBc(bcv);if(dupb){toast(T('⚠️ Этот штрихкод уже у: ')+lab(dupb));return}}
     this.disabled=true;var RU=readUnit('f');rd();var K=combos(),qa=parseInt($('qa').value,10)||0,single=isSingle(K);
     K.forEach(function(k){
       var n=single?qa:(parseInt(qm[k[0]+'|'+k[1]],10)||0);
       var ex=S.items.filter(function(i){return i.name.toLowerCase()===nm.toLowerCase()&&i.cat===c&&(i.color||'')===k[0]&&(i.size||'')===k[1]})[0];
       if(ex){if(single&&bcv&&!ex.bc)ex.bc=bcv;if(n>0)apply(ex,'in',n,T('Приход (в папку)'));return}
-      var x={id:uid(),name:nm,cat:c,size:k[1],color:k[0],price:pr,qty:0,ar:false,u:RU.u,pk:RU.pk,pb:RU.pb,ab:ME?ME.name:'',ad:Date.now()};if(single&&bcv)x.bc=bcv;S.items.push(x);if(n>0)apply(x,'in',n,T('Начальный остаток'));
+      var x={id:uid(),name:nm,cat:c,size:k[1],color:k[0],price:pr,cp:(cp!==null?cp:0),qty:0,ar:false,u:RU.u,pk:RU.pk,pb:RU.pb,ab:ME?ME.name:'',ad:Date.now()};if(single&&bcv)x.bc=bcv;S.items.push(x);if(n>0)apply(x,'in',n,T('Начальный остаток'));
     });
     fo[(nm+'|'+c).toLowerCase()]=true;save();close();toast(T('Добавлено позиций: ')+K.length);logAct('добавил товар «'+nm+'» ('+K.length+' поз.)');render();
   };
@@ -562,12 +564,12 @@ function bindSeg(){[].forEach.call(document.querySelectorAll('#hsg button'),func
 function wstats(){
   var now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59).getTime(),start=end-wsPer*864e5+1,step=wsPer>120?7*864e5:864e5,n=Math.ceil((end-start+1)/step),rev=[],qty=[],i;
   for(i=0;i<n;i++){rev.push(0);qty.push(0)}
-  var sold=0,sum=0,got=0,top={},gm={},sm={};
+  var sold=0,sum=0,got=0,cost=0,top={},gm={},sm={};
   S.log.forEach(function(l){
     if(l.t<start||l.t>end)return;
     if(l.type==='in'){got+=l.qty;var i0=find(l.id),u0=i0?uOf(i0):'шт';gm[u0]=(gm[u0]||0)+l.qty;return}
     if(l.type!=='out')return;
-    var k=Math.min(n-1,Math.floor((l.t-start)/step));rev[k]+=l.sum||0;qty[k]+=l.qty;sold+=l.qty;sum+=l.sum||0;
+    var k=Math.min(n-1,Math.floor((l.t-start)/step));rev[k]+=l.sum||0;qty[k]+=l.qty;sold+=l.qty;sum+=l.sum||0;var ic0=find(l.id);cost+=((ic0&&ic0.cp)||0)*l.qty;
     var it=find(l.id),nm=it?it.name:l.name,t=top[nm]||(top[nm]={q:0,s:0}),uu=it?uOf(it):'шт';t.u=uu;sm[uu]=(sm[uu]||0)+l.qty;t.q+=l.qty;t.s+=l.sum||0;
   });
   var vals=wsMet==='rev'?rev:qty,pts=vals.map(function(y,j){return {x:start+j*step,y:y}}),avg=vals.reduce(function(a,b){return a+b},0)/(wsPer>120?n:wsPer);
@@ -578,6 +580,10 @@ function wstats(){
   var h=T('<h1>История</h1>')+hseg()+chipsHtml('wsm',[['rev','Выручка'],['qty','Штуки']],wsMet)+chipsHtml('wsp',[[7,T('7 дн.')],[30,T('30 дн.')],[90,T('90 дн.')],[365,'Год']],wsPer);
   h+='<div class="panel"><small>'+(wsMet==='rev'?T('Продажи в день (в среднем)'):T('Продано штук в день (в среднем)'))+'</small><div style="font-size:26px;font-weight:800;color:'+col+';margin-bottom:6px">'+(wsMet==='rev'?money(avg):(Math.round(avg*10)/10)+T(' шт'))+'</div>'+lineSvg(pts,col)+(wsPer>120?T('<small>по неделям</small>'):'')+'</div>';
   h+='<div class="stats"><div class="stat s3"><b class="i">'+money(sum)+T('</b><small>продано · ')+mapTxt(sm)+'</small></div><div class="stat s3"><b>'+mapTxt(gm)+T('</b><small>приход за период</small></div><div class="stat s3"><b class="')+(low?'o':'')+'">'+low+T('</b><small>заканчивается (≤3 шт)</small></div><div class="stat s3"><b class="')+(np?'o':'')+'">'+np+T('</b><small>без цены (не в стоимости)</small></div></div>');
+  if(isOwn){
+    var prof=sum-cost,mrg=sum>0?Math.round(prof/sum*100):0,noCp=cost===0&&sum>0;
+    h+=T('<div class="panel"><h3>Прибыль за период</h3>')+'<div style="font-size:26px;font-weight:700;color:var(--in)">'+money(prof)+'</div><small>'+T('выручка ')+money(sum)+T(' · закупка ')+money(cost)+(noCp?'':T(' · наценка ')+mrg+'%')+'</small>'+(noCp?'<br><small style="color:var(--warn)">'+T('Закупочные цены не заполнены — пока это вся выручка, а не прибыль')+'</small>':'')+'</div>';
+  }
   h+=T('<div class="panel"><h3>Стоимость склада по категориям</h3>')+donutHtml(ci,CL())+'</div>';
   h+=T('<div class="panel"><h3>Топ продаж за период</h3>')+(tk.length?tk.map(function(k){return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(k)+'</span><b>'+qt(top[k].q,top[k].u)+'</b></div><small>'+money(top[k].s)+'</small><div class="bar"><i style="width:'+Math.round(top[k].q/mx*100)+'%"></i></div></div>'}).join(''):T('<div class="empty" style="padding:20px">За этот период продаж не было</div>'))+'</div>';
   $('app').innerHTML=h;bindSeg();bindChips('wsm',function(v){wsMet=v;wstats()});bindChips('wsp',function(v){wsPer=v;wstats()});
