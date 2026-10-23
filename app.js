@@ -51,8 +51,8 @@ function mergeMainIn(R,v){
   if(v!=null)setVM(v);baseMain=clone(cleanMain(R));LSS('skladgo.base.main',JSON.stringify(baseMain));
 }
 function who(){
-  if(!window.claude)return Promise.resolve();
-  return claude.use('user').then(function(u){if(!u)return;return Promise.all([u.id(),u.isOwner()]).then(function(r){myId=r[0];isOwn=!!r[1]})}).catch(function(){});
+  if(!window.skladBackend)return Promise.resolve();
+  return skladBackend.user().then(function(u){if(!u)return;return Promise.all([u.id(),u.isOwner()]).then(function(r){myId=r[0];isOwn=!!r[1]})}).catch(function(){});
 }
 function mystatus(){
   if(isOwn)return 'active';
@@ -73,7 +73,7 @@ function reg(){
     else ref.set({uid:myId,name:ME.name,phone:ME.phone,mail:ME.mail,owner:isOwn,status:isOwn?'active':'pending',t:Date.now()}).then(function(){logAct('зарегистрировался в программе');if(ME.fresh){delete ME.fresh;try{localStorage.setItem('skladgo.me',JSON.stringify(ME))}catch(e){}}}).catch(function(){});
   }).catch(function(){});
 }
-function logAct(t){if(!sdb||!window.claude)return;sdb.collection('activity').add({t:Date.now(),by:ME?ME.name:'',uid:myId||'',txt:t}).catch(function(){})}
+function logAct(t){if(!sdb)return;sdb.collection('activity').add({t:Date.now(),by:ME?ME.name:'',uid:myId||'',txt:t}).catch(function(){})}
 function actSnap(sn){
   var L=sn.docs.map(function(x){var d=JSON.parse(JSON.stringify(x.data()));d._id=x.id;return d}).sort(function(a,b){return b.t-a.t});
   var first=actSeen===null;if(first)actSeen={};
@@ -94,10 +94,10 @@ function remote(d,v){
   if(sy!=='wait'&&!anyDirty())setSy('ok');render();
 }
 (function(){
-  if(!window.claude)return;
-  claude.use('db').then(function(db){
+  if(!window.skladBackend)return;
+  skladBackend.db().then(function(db){
     if(!db)return;dbd=db.doc('warehouse/main');sdb=db;who().then(function(){reg();restore()});ddb=db.doc('warehouse/debts');ddb.onSnapshot(dsnap,function(){});
-    db.collection('staff').onSnapshot(function(sn){staff=sn.docs.map(function(x){var d=JSON.parse(JSON.stringify(x.data()));d._id=x.id;return d});restore();var st=mystatus();if(st!==lastSt){lastSt=st;if(ME&&!$('ov').innerHTML)render()}else if(tab==='team'&&ME&&!$('ov').innerHTML)render()},function(){});
+    db.collection('staff').onSnapshot(function(sn){staff=sn.docs.map(function(x){var d=JSON.parse(JSON.stringify(x.data()));d._id=x.id;return d});var my=staff.filter(function(x){return x._id===myId})[0];if(my)isOwn=!!my.owner;restore();var st=mystatus();if(st!==lastSt){lastSt=st;if(ME&&!$('ov').innerHTML)render()}else if(tab==='team'&&ME&&!$('ov').innerHTML)render()},function(){});
     db.collection('activity').orderBy('t','desc').limit(100).onSnapshot(actSnap,function(){});
     dbd.onSnapshot(function(s){
       if(!s.exists){if(S.items.length){dirtyMain=true;LSS('skladgo.dirty.main','1');push()}else if(!$('ov').innerHTML)render();return}
@@ -547,8 +547,12 @@ function hist(){
 }
 function csv(rows){return '\ufeff'+rows.map(function(r){return r.map(function(c){c=String(c==null?'':c);return /[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c}).join(';')}).join('\r\n')}
 function dl(name,rows,raw){
-  if(!window.claude){toast('⚠️ Скачивание недоступно');return}
-  claude.use('downloads').then(function(d){if(!d){toast('⚠️ Скачивание недоступно в этом режиме');return}return d.save({filename:name,data:raw||csv(rows)})}).then(function(){toast('Файл готов — откройте в Excel')},function(){});
+  try{
+    var b=new Blob([raw||csv(rows)],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(u)},1000);
+    toast('Файл готов — откройте в Excel');
+  }catch(e){toast('⚠️ Не удалось сохранить файл')}
 }
 var DT={give:['Я дал в долг',1],get:['Я получил',-1]},FL={give:'⬆ Дать',get:'⬇ Получить'},dview='people',dper='day';
 function dnorm(x){var m={gave:'give',paid:'give',took:'get',got:'get'};(x.ops||[]).forEach(function(o){if(m[o.type])o.type=m[o.type]});x.trash=x.trash||[];return x}
@@ -990,8 +994,11 @@ function team(){
   $('app').innerHTML=h;$('me').onclick=function(){gate(true)};
   if($('lo'))$('lo').onclick=function(){if(anyDirty()&&this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Не всё отправлено! Нажмите ещё раз — выйти и потерять';return}window.skladAuth.signOut()};
   if($('da'))$('da').onclick=function(){
-    open('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Введите пароль для подтверждения. Данные склада останутся.</small><input id="dpw" type="password" placeholder="Пароль" autocomplete="current-password"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>');
-    $('dok').onclick=function(){window.skladAuth.deleteAccount($('dpw').value).catch(function(e){toast('⚠️ '+((e&&e.message)||'Не удалось удалить'))})};
+    open('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Вы выйдете из программы, и для возврата владельцу придётся заново подтвердить доступ. Данные склада и долгов останутся. Впишите слово <b>удалить</b> для подтверждения.</small><input id="dpw" placeholder="удалить" autocapitalize="none"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>');
+    $('dok').onclick=function(){
+      if($('dpw').value.trim().toLowerCase()!=='удалить'){toast('⚠️ Впишите слово «удалить»');return}
+      window.skladAuth.deleteAccount().catch(function(e){toast('⚠️ '+((e&&e.message)||'Не удалось удалить'))});
+    };
   };
   if($('bzs'))$('bzs').onclick=function(){S.biz=$('bz').value.trim();save();logAct('изменил название магазина');toast('🏪 Сохранено')};
   [].forEach.call(document.querySelectorAll('[data-ap]'),function(b){b.onclick=function(){setSt(b.dataset.ap,'active')}});

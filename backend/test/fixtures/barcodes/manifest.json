@@ -1,0 +1,1322 @@
+[
+{
+"file": "ean13__4006381333931__clean.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "clean",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__blur.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "blur",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__noise.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "noise",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__lowcontrast.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "lowcontrast",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__gradient.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "gradient",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__rot6.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "rot6",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__rot-9.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "rot-9",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__rot14.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "rot14",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__small.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "small",
+"size": [
+187,
+108
+]
+},
+{
+"file": "ean13__4006381333931__flip.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "flip",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__4006381333931__vertical.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "vertical",
+"size": [
+180,
+312
+]
+},
+{
+"file": "ean13__4006381333931__dark.pgm.gz",
+"format": "ean13",
+"value": "4006381333931",
+"variant": "dark",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__clean.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "clean",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__blur.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "blur",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__noise.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "noise",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__lowcontrast.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "lowcontrast",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__gradient.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "gradient",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__rot6.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "rot6",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__rot-9.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "rot-9",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__rot14.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "rot14",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__small.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "small",
+"size": [
+187,
+108
+]
+},
+{
+"file": "ean13__5901234123457__flip.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "flip",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__5901234123457__vertical.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "vertical",
+"size": [
+180,
+312
+]
+},
+{
+"file": "ean13__5901234123457__dark.pgm.gz",
+"format": "ean13",
+"value": "5901234123457",
+"variant": "dark",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__clean.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "clean",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__blur.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "blur",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__noise.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "noise",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__lowcontrast.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "lowcontrast",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__gradient.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "gradient",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__rot6.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "rot6",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__rot-9.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "rot-9",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__rot14.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "rot14",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__small.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "small",
+"size": [
+187,
+108
+]
+},
+{
+"file": "ean13__9780201379624__flip.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "flip",
+"size": [
+312,
+180
+]
+},
+{
+"file": "ean13__9780201379624__vertical.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "vertical",
+"size": [
+180,
+312
+]
+},
+{
+"file": "ean13__9780201379624__dark.pgm.gz",
+"format": "ean13",
+"value": "9780201379624",
+"variant": "dark",
+"size": [
+312,
+180
+]
+},
+{
+"file": "upca__036000291452__clean.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "clean",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__blur.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "blur",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__noise.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "noise",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__lowcontrast.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "lowcontrast",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__gradient.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "gradient",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__rot6.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "rot6",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__rot-9.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "rot-9",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__rot14.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "rot14",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__small.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "small",
+"size": [
+174,
+108
+]
+},
+{
+"file": "upca__036000291452__flip.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "flip",
+"size": [
+290,
+180
+]
+},
+{
+"file": "upca__036000291452__vertical.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "vertical",
+"size": [
+180,
+290
+]
+},
+{
+"file": "upca__036000291452__dark.pgm.gz",
+"format": "upca",
+"value": "036000291452",
+"variant": "dark",
+"size": [
+290,
+180
+]
+},
+{
+"file": "ean8__96385074__clean.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "clean",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__blur.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "blur",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__noise.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "noise",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__lowcontrast.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "lowcontrast",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__gradient.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "gradient",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__rot6.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "rot6",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__rot-9.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "rot-9",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__rot14.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "rot14",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__small.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "small",
+"size": [
+146,
+108
+]
+},
+{
+"file": "ean8__96385074__flip.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "flip",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__96385074__vertical.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "vertical",
+"size": [
+180,
+244
+]
+},
+{
+"file": "ean8__96385074__dark.pgm.gz",
+"format": "ean8",
+"value": "96385074",
+"variant": "dark",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__clean.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "clean",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__blur.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "blur",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__noise.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "noise",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__lowcontrast.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "lowcontrast",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__gradient.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "gradient",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__rot6.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "rot6",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__rot-9.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "rot-9",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__rot14.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "rot14",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__small.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "small",
+"size": [
+146,
+108
+]
+},
+{
+"file": "ean8__73513537__flip.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "flip",
+"size": [
+244,
+180
+]
+},
+{
+"file": "ean8__73513537__vertical.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "vertical",
+"size": [
+180,
+244
+]
+},
+{
+"file": "ean8__73513537__dark.pgm.gz",
+"format": "ean8",
+"value": "73513537",
+"variant": "dark",
+"size": [
+244,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__clean.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "clean",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__blur.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "blur",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__noise.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "noise",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__lowcontrast.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "lowcontrast",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__gradient.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "gradient",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__rot6.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "rot6",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__rot-9.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "rot-9",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__rot14.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "rot14",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__small.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "small",
+"size": [
+244,
+108
+]
+},
+{
+"file": "code128__SKLAD-001__flip.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "flip",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__SKLAD-001__vertical.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "vertical",
+"size": [
+180,
+407
+]
+},
+{
+"file": "code128__SKLAD-001__dark.pgm.gz",
+"format": "code128",
+"value": "SKLAD-001",
+"variant": "dark",
+"size": [
+407,
+180
+]
+},
+{
+"file": "code128__12345678901234__clean.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "clean",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__blur.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "blur",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__noise.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "noise",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__lowcontrast.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "lowcontrast",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__gradient.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "gradient",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__rot6.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "rot6",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__rot-9.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "rot-9",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__rot14.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "rot14",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__small.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "small",
+"size": [
+215,
+108
+]
+},
+{
+"file": "code128__12345678901234__flip.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "flip",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__12345678901234__vertical.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "vertical",
+"size": [
+180,
+359
+]
+},
+{
+"file": "code128__12345678901234__dark.pgm.gz",
+"format": "code128",
+"value": "12345678901234",
+"variant": "dark",
+"size": [
+359,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__clean.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "clean",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__blur.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "blur",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__noise.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "noise",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__lowcontrast.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "lowcontrast",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__gradient.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "gradient",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__rot6.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "rot6",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__rot-9.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "rot-9",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__rot14.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "rot14",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__small.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "small",
+"size": [
+274,
+108
+]
+},
+{
+"file": "code128__Kurtka-L-44__flip.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "flip",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code128__Kurtka-L-44__vertical.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "vertical",
+"size": [
+180,
+456
+]
+},
+{
+"file": "code128__Kurtka-L-44__dark.pgm.gz",
+"format": "code128",
+"value": "Kurtka-L-44",
+"variant": "dark",
+"size": [
+456,
+180
+]
+},
+{
+"file": "code39__ABC-123__clean.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "clean",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__blur.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "blur",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__noise.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "noise",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__lowcontrast.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "lowcontrast",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__gradient.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "gradient",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__rot6.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "rot6",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__rot-9.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "rot-9",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__rot14.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "rot14",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__small.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "small",
+"size": [
+228,
+108
+]
+},
+{
+"file": "code39__ABC-123__flip.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "flip",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__ABC-123__vertical.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "vertical",
+"size": [
+180,
+380
+]
+},
+{
+"file": "code39__ABC-123__dark.pgm.gz",
+"format": "code39",
+"value": "ABC-123",
+"variant": "dark",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__clean.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "clean",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__blur.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "blur",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__noise.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "noise",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__lowcontrast.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "lowcontrast",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__gradient.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "gradient",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__rot6.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "rot6",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__rot-9.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "rot-9",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__rot14.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "rot14",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__small.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "small",
+"size": [
+228,
+108
+]
+},
+{
+"file": "code39__SKLAD01__flip.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "flip",
+"size": [
+380,
+180
+]
+},
+{
+"file": "code39__SKLAD01__vertical.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "vertical",
+"size": [
+180,
+380
+]
+},
+{
+"file": "code39__SKLAD01__dark.pgm.gz",
+"format": "code39",
+"value": "SKLAD01",
+"variant": "dark",
+"size": [
+380,
+180
+]
+}
+]

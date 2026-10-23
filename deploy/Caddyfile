@@ -1,0 +1,5 @@
+# Замените sklad.example.com на ваш домен. HTTPS-сертификат Caddy получит и продлит сам.
+sklad.example.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:3000
+}
