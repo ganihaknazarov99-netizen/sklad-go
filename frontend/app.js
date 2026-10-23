@@ -4,7 +4,7 @@ try{var r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
 S.trash=S.trash||[];S.biz=S.biz||'';S.items.forEach(function(i){if(i.ar===undefined)i.ar=i.qty<=0});
 var ME=null,sdb=null,staff=[],staffReady=false,D={people:[],ops:[]},dq='',dflt='all',ddb=null,dpend=null,dpending=false,dpushT,dmine=0;try{var dr=localStorage.getItem('skladgo.debts');if(dr)D=JSON.parse(dr)}catch(e){}
 try{ME=JSON.parse(localStorage.getItem('skladgo.me'))}catch(e){}
-var invMode=false,invQ='',invT=null;
+var invMode=false,invQ='',invT=null,ordCover=14;
 var dbd=null,pushT,pending=false,mine=0,pend=null,sy='',ltm='',myId=null,isOwn=false,actSeen=null,actList=[],lastSt='',seenT=0;
 try{seenT=+localStorage.getItem('skladgo.seen')||0;if(!seenT){seenT=Date.now();localStorage.setItem('skladgo.seen',seenT)}}catch(e){}
 function sytxt(){return sy==='ok'?T('🟢 сохранено ')+ltm:sy==='wait'?T('⏳ сохраняется…'):sy==='err'?T('⚠️ ошибка сохранения'):sy==='off'?T('⚠️ нет связи · данные на телефоне'):''}
@@ -300,6 +300,38 @@ function scanUI(mode,cb,cur){
 }
 /* ===== Пересчёт склада (инвентаризация): обходим полки, вписываем факт,
    в конце видим расхождения и применяем их одной кнопкой ===== */
+/* ===== Что заказать: считаем скорость продаж за выбранный период
+   и смотрим, на сколько дней хватит остатка ===== */
+function orderAdvice(days,cover){
+  var start=Date.now()-days*864e5,sold={};
+  S.log.forEach(function(l){if(l.inv||l.type!=='out'||l.t<start)return;sold[l.id]=(sold[l.id]||0)+l.qty});
+  var out=[];
+  S.items.forEach(function(i){
+    var q=sold[i.id]||0;if(!q)return;                 // не продавался — советовать нечего
+    var perDay=q/days;if(perDay<=0)return;
+    var left=i.qty/perDay;if(left>=cover)return;      // запаса хватает
+    var need=Math.max(1,Math.ceil(perDay*cover-i.qty));
+    out.push({it:i,week:perDay*7,left:left,need:need,sum:need*(i.cp||i.price||0),byCp:!!i.cp});
+  });
+  return out.sort(function(a,b){return a.left-b.left});
+}
+function orderHtml(){
+  var A=orderAdvice(wsPer,ordCover);
+  var h=T('<div class="panel"><h3>🧾 Что заказать</h3>')+
+    '<small style="color:var(--mu)">'+T('По продажам за выбранный период. Запас:')+'</small>'+
+    chipsHtml('ocv',[[7,T('на неделю')],[14,T('на 2 недели')],[30,T('на месяц')]],ordCover);
+  if(!A.length)return h+T('<div class="empty">Заказывать нечего: на всё, что продаётся, запаса хватает</div></div>');
+  var tot=0,allCp=true;
+  h+=A.slice(0,20).map(function(a){
+    tot+=a.sum;if(!a.byCp)allCp=false;
+    var d=Math.floor(a.left);
+    return '<div class="log"><div><b>'+esc(lab(a.it))+'</b><small>'+T('продаётся ')+(Math.round(a.week*10)/10)+T(' шт в неделю · осталось на ')+(d<1?T('меньше дня'):d+T(' дн.'))+'</small></div>'+
+      '<span style="color:var(--ac);font-weight:700;white-space:nowrap">'+T('＋')+a.need+T(' шт')+'</span></div>';
+  }).join('');
+  if(A.length>20)h+='<small style="color:var(--mu)">'+T('…и ещё позиций: ')+(A.length-20)+'</small>';
+  if(isOwn)h+='<div class="lbl" style="margin-top:10px">'+T('Примерно понадобится: ')+money(tot)+(allCp?T(' (по закупке)'):T(' (часть — по продажной цене)'))+'</div>';
+  return h+'</div>';
+}
 function invSum(){
   var inv=S.inv||{c:{}},done=0,bad=0,dq=0,ds=0;
   S.items.forEach(function(i){
@@ -658,8 +690,9 @@ function wstats(){
     h+=T('<div class="panel"><h3>Прибыль за период</h3>')+'<div style="font-size:26px;font-weight:700;color:var(--in)">'+money(prof)+'</div><small>'+T('выручка ')+money(sum)+T(' · закупка ')+money(cost)+(noCp?'':T(' · наценка ')+mrg+'%')+'</small>'+(noCp?'<br><small style="color:var(--warn)">'+T('Закупочные цены не заполнены — пока это вся выручка, а не прибыль')+'</small>':'')+'</div>';
   }
   h+=T('<div class="panel"><h3>Стоимость склада по категориям</h3>')+donutHtml(ci,CL())+'</div>';
+  h+=orderHtml();
   h+=T('<div class="panel"><h3>Топ продаж за период</h3>')+(tk.length?tk.map(function(k){return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(k)+'</span><b>'+qt(top[k].q,top[k].u)+'</b></div><small>'+money(top[k].s)+'</small><div class="bar"><i style="width:'+Math.round(top[k].q/mx*100)+'%"></i></div></div>'}).join(''):T('<div class="empty" style="padding:20px">За этот период продаж не было</div>'))+'</div>';
-  $('app').innerHTML=h;bindSeg();bindChips('wsm',function(v){wsMet=v;wstats()});bindChips('wsp',function(v){wsPer=v;wstats()});
+  $('app').innerHTML=h;bindSeg();bindChips('wsm',function(v){wsMet=v;wstats()});bindChips('wsp',function(v){wsPer=v;wstats()});bindChips('ocv',function(v){ordCover=+v;wstats()});
 }
 function trashHtml(){
   var L=(S.trash||[]).slice().reverse();if(!L.length)return '';
