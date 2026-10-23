@@ -30,8 +30,14 @@ function makeAuth(ctx) {
     db.prepare('INSERT OR REPLACE INTO codes(user_id,purpose,code_hash,expires_at,attempts,sent_at) VALUES(?,?,?,?,0,?)')
       .run(user.id, purpose, S.sha(user.id + ':' + purpose + ':' + code), Date.now() + cfg.codeTtlMs, Date.now());
     const what = purpose === 'verify' ? 'подтверждения почты' : 'сброса пароля';
-    await mailer.send(user.email, 'Sklad Go: код ' + what,
+    // Письмо не ушло (ключ, сеть, провайдер) — говорим об этом прямо, а не «ошибка сервера»
+    try {
+      await mailer.send(user.email, 'Sklad Go: код ' + what,
       `Ваш код ${what}: ${code}\n\nКод действует 15 минут. Если вы его не запрашивали, просто проигнорируйте письмо.`);
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      throw new HttpError(502, 'mail_failed');
+    }
   }
   function checkCode(user, purpose, code) {
     const row = db.prepare('SELECT * FROM codes WHERE user_id=? AND purpose=?').get(user.id, purpose);
