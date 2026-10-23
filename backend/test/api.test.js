@@ -83,6 +83,43 @@ test('права: сотрудник без подтверждения не ви
   await t.app.close();
 });
 
+test('закупочные цены: сотруднику не отдаются и не стираются его записью', async () => {
+  const t = await boot();
+  const owner = await t.signup('owner@gmail.com', 'Гани');
+  const staff = await t.signup('staff@gmail.com', 'Алишер');
+  await t.call('PATCH', '/api/docs/staff/' + staff.user.id, { data: { status: 'active' } }, owner.token);
+
+  // владелец заводит товар с закупочной ценой
+  const doc = { items: [{ id: 'a', name: 'Куртка', qty: 5, price: 450, cp: 279 }], log: [], trash: [{ id: 't1', item: { id: 'b', name: 'Кепка', qty: 0, price: 45, cp: 20 } }] };
+  assert.equal((await t.call('PUT', '/api/docs/warehouse/main', { data: doc }, owner.token)).status, 200);
+
+  // владелец видит закупку, сотрудник — нет, ни в товарах, ни в корзине
+  const asOwner = await t.call('GET', '/api/docs/warehouse/main', undefined, owner.token);
+  assert.equal(asOwner.body.data.items[0].cp, 279);
+  const asStaff = await t.call('GET', '/api/docs/warehouse/main', undefined, staff.token);
+  assert.equal(asStaff.body.data.items[0].cp, undefined);
+  assert.equal(asStaff.body.data.items[0].price, 450, 'продажная цена сотруднику нужна');
+  assert.equal(asStaff.body.data.trash[0].item.cp, undefined);
+
+  // сотрудник продаёт штуку и сохраняет склад тем, что у него есть
+  const mine = asStaff.body.data;
+  mine.items[0].qty = 4;
+  assert.equal((await t.call('PUT', '/api/docs/warehouse/main', { data: mine }, staff.token, { 'If-Match': String(asStaff.body.version) })).status, 200);
+
+  // остаток изменился, а закупочная цена уцелела
+  const after = await t.call('GET', '/api/docs/warehouse/main', undefined, owner.token);
+  assert.equal(after.body.data.items[0].qty, 4);
+  assert.equal(after.body.data.items[0].cp, 279, 'закупка не должна теряться после записи сотрудника');
+  assert.equal(after.body.data.trash[0].item.cp, 20);
+
+  // и сотрудник не может проставить закупку сам
+  mine.items[0].cp = 1;
+  await t.call('PUT', '/api/docs/warehouse/main', { data: mine }, staff.token);
+  const after2 = await t.call('GET', '/api/docs/warehouse/main', undefined, owner.token);
+  assert.equal(after2.body.data.items[0].cp, 279, 'сотрудник не задаёт закупочную цену');
+  await t.app.close();
+});
+
 test('блокировка сотрудника закрывает доступ и завершает его сессии', async () => {
   const t = await boot();
   const owner = await t.signup('owner@gmail.com', 'Гани');

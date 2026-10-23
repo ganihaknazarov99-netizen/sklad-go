@@ -13,6 +13,30 @@ function makeDocs(ctx) {
   const tickets = new Map();          // одноразовые билеты для SSE
 
   const isActive = (u) => u.role === 'owner' || u.status === 'active';
+
+  /* ----- закупочные цены: их видит только владелец -----
+     Сотруднику документ склада уходит без поля cp, а когда он присылает
+     свою версию обратно, цены берутся из того, что уже лежит на сервере.
+     Иначе продавец, сохранив склад, стёр бы их все. */
+  const COST = 'cp';
+  const isMainDoc = (col, id) => col === 'warehouse' && id === 'main';
+  function stripCost(data) {
+    if (!data || typeof data !== 'object') return data;
+    const d = JSON.parse(JSON.stringify(data));
+    (d.items || []).forEach((i) => { if (i) delete i[COST]; });
+    (d.trash || []).forEach((e) => { if (e && e.item) delete e.item[COST]; });
+    return d;
+  }
+  function keepCost(next, prev) {
+    const was = {};
+    const remember = (i) => { if (i && i.id && i[COST] !== undefined) was[i.id] = i[COST]; };
+    ((prev && prev.items) || []).forEach(remember);
+    ((prev && prev.trash) || []).forEach((e) => { if (e) remember(e.item); });
+    const restore = (i) => { if (!i) return; delete i[COST]; if (was[i.id] !== undefined) i[COST] = was[i.id]; };
+    (next.items || []).forEach(restore);
+    (next.trash || []).forEach((e) => { if (e) restore(e.item); });
+    return next;
+  }
   const allowedStatuses = new Set(['active', 'pending', 'blocked']);
 
   function broadcast(c, p) {
@@ -77,7 +101,10 @@ function makeDocs(ctx) {
     if (col === 'meta') { const o = db.prepare("SELECT id FROM users WHERE role='owner' LIMIT 1").get(); return o ? { exists: true, id, data: { uid: o.id }, version: 1 } : { exists: false, id }; }
     if (col === 'staff') { const r = auth.byId(id); return r ? { exists: true, id, data: staffView(r, u), version: r.updated_at } : { exists: false, id }; }
     const r = db.prepare('SELECT data,version FROM docs WHERE path=?').get(path);
-    return r ? { exists: true, id, data: JSON.parse(r.data), version: r.version } : { exists: false, id };
+    if (!r) return { exists: false, id };
+    let data = JSON.parse(r.data);
+    if (isMainDoc(col, id) && u.role !== 'owner') data = stripCost(data);
+    return { exists: true, id, data, version: r.version };
   }
   function writeDoc(u, path, data, mode, ifMatch) {
     const { col, id } = parsePath(path);
@@ -88,6 +115,7 @@ function makeDocs(ctx) {
     if (ifMatch !== undefined && ifMatch !== null && (!row || +ifMatch !== row.version)) throw new HttpError(409, 'version_conflict', { version: row ? row.version : 0 });
     let next = data;
     if (mode === 'update') { if (!row) throw new HttpError(404, 'not_found'); next = Object.assign(JSON.parse(row.data), data); }
+    if (isMainDoc(col, id) && u.role !== 'owner') next = keepCost(next, row ? JSON.parse(row.data) : null);
     const json = JSON.stringify(next);
     if (Buffer.byteLength(json) > cfg.maxDocBytes) throw new HttpError(413, 'too_large');
     const version = row ? row.version + 1 : 1;
