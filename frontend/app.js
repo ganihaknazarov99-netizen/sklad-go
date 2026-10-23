@@ -343,6 +343,74 @@ function orderHtml(){
   if(isOwn)h+='<div class="lbl" style="margin-top:10px">'+T('Примерно понадобится: ')+money(tot)+(allCp?T(' (по закупке)'):T(' (часть — по продажной цене)'))+'</div>';
   return h+'</div>';
 }
+/* ===== Ценники на обычном листе A4 =====
+   Штрихкод рисуем сами по таблице Code128 из barcode.js — той же, по которой
+   программа коды распознаёт, поэтому нарисованное ей же и читается. */
+function bc128(text){
+  var T=window.SkladBarcode&&SkladBarcode._tables&&SkladBarcode._tables.C128;
+  if(!T||!text)return null;
+  text=String(text);
+  var vals=[104],sum=104;                     // START B
+  for(var i=0;i<text.length;i++){
+    var c=text.charCodeAt(i)-32;
+    if(c<0||c>95)return null;                 // только печатные ASCII
+    vals.push(c);sum+=c*(i+1);
+  }
+  vals.push(sum%103);vals.push(106);          // контрольный символ и STOP
+  var mods=[];
+  for(var v=0;v<vals.length;v++){
+    var pat=T[vals[v]];if(!pat)return null;
+    for(var j=0;j<pat.length;j++){var w=+pat[j];for(var k=0;k<w;k++)mods.push(j%2===0?1:0)}
+  }
+  return mods;
+}
+function bcSvg(code,hmm){
+  var m=bc128(code);if(!m)return '';
+  var mod=0.33,w=m.length*mod,h=hmm||9,r='',x=0,i=0;
+  while(i<m.length){
+    if(!m[i]){i++;x+=mod;continue}
+    var j=i;while(j<m.length&&m[j])j++;
+    r+='<rect x="'+(x).toFixed(2)+'" y="0" width="'+((j-i)*mod).toFixed(2)+'" height="'+h+'" fill="#000"/>';
+    x+=(j-i)*mod;i=j;
+  }
+  return '<svg class="bc" viewBox="0 0 '+w.toFixed(2)+' '+h+'" width="'+w.toFixed(2)+'mm" height="'+h+'mm" preserveAspectRatio="none">'+r+'</svg>';
+}
+function printHtml(h){
+  var old=$('prn');if(old)old.remove();
+  var pr=document.createElement('div');pr.id='prn';pr.innerHTML=h;document.body.appendChild(pr);
+  var done=function(){var e=$('prn');if(e)e.remove();window.removeEventListener('afterprint',done)};
+  window.addEventListener('afterprint',done);
+  setTimeout(function(){try{window.print()}catch(e){toast(T('⚠️ Печать недоступна'));done()}},350);
+}
+function tagsPrint(L,copies){
+  copies=Math.max(1,Math.min(20,copies||1));
+  var cells=[];
+  L.forEach(function(it){
+    for(var c=0;c<copies;c++){
+      var code=it.bc?bcNorm(it.bc):'';
+      cells.push('<div class="tag">'+
+        (S.biz?'<div class="shop">'+esc(S.biz)+'</div>':'')+
+        '<div class="nm">'+esc(it.name)+'</div>'+
+        '<div class="mt">'+esc([it.size,it.color].filter(Boolean).join(' · '))+'</div>'+
+        '<div class="pr">'+money(pf(it))+'</div>'+
+        (code?'<div class="bcw">'+bcSvg(code,8)+'<div class="bcn">'+esc(code)+'</div></div>':'')+
+      '</div>');
+    }
+  });
+  if(!cells.length){toast(T('⚠️ Нечего печатать'));return}
+  printHtml('<div class="tags">'+cells.join('')+'</div>');
+  toast(T('Откроется печать: выберите «Сохранить как PDF» или принтер'));
+}
+function tagsSheet(L){
+  var noBc=L.filter(function(i){return !i.bc}).length;
+  open(T('<h2>🏷 Ценники</h2>')+
+    '<small style="color:var(--mu)">'+T('Позиций в печати: ')+L.length+
+      (noBc?T('. Без штрихкода: ')+noBc+T(' — у них будут только название и цена'):'')+'</small>'+
+    T('<div class="lbl">Сколько ценников на каждый товар</div>')+
+    '<input id="tgc" type="number" inputmode="numeric" value="1" min="1" max="20">'+
+    T('<button class="go ac" id="tgp">Печать на листе A4</button>'));
+  $('tgp').onclick=function(){var c=parseInt($('tgc').value,10)||1;close();tagsPrint(L,c)};
+}
 function invSum(){
   var inv=S.inv||{c:{}},done=0,bad=0,dq=0,ds=0;
   S.items.forEach(function(i){
@@ -419,7 +487,7 @@ function stock(){
   var h='<h1>'+LOGO+T('<small id="syi" style="display:inline;font-size:12px" title="Общий склад">')+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+T('</b><small>стоимость склада · ')+unitsTxt(S.items)+T(' · подробнее ›</small></div><div class="stat"><b>')+money(rev)+T('</b><small>продано сегодня</small></div><div class="stat"><b class="i">＋')+inn+T('</b><small>приход сегодня</small></div><div class="stat"><b class="o">−')+out+T('</b><small>расход сегодня</small></div></div>');
   h+='<div class="srow">'+T('<input id="q" type="search" placeholder="Поиск: название, размер, цвет…" value="')+esc(q)+'"><button class="scanb" id="scb" type="button" aria-label="'+T('Сканер штрихкода')+'">▥</button></div>';
   h+='<div class="chips">'+['Все','⚠️ Мало','🗄 Архив'].concat(S.cats).map(function(c){return '<div class="chip'+(c===cat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</div>'}).join('')+'</div>';
-  h+='<div style="text-align:right;margin:-2px 0 8px"><button class="link" id="invst">'+(S.inv?T('📋 Продолжить пересчёт'):T('📋 Пересчёт склада'))+'</button></div>';
+  h+='<div style="display:flex;justify-content:flex-end;gap:14px;margin:-2px 0 8px"><button class="link" id="tgst">'+T('🏷 Ценники')+'</button><button class="link" id="invst">'+(S.inv?T('📋 Продолжить пересчёт'):T('📋 Пересчёт склада'))+'</button></div>';
   var L=S.items.filter(function(i){var arc=cat==='🗄 Архив';return(arc?!!i.ar:!i.ar)&&(cat==='Все'||arc||(cat==='⚠️ Мало'?i.qty<=3:i.cat===cat))&&(lab(i).toLowerCase().indexOf(q.toLowerCase())>-1||(!!i.bc&&String(i.bc).indexOf(q.trim())>-1))});
   L.sort(function(a,b){return lab(a).localeCompare(lab(b),'ru')});
   if(!L.length)h+='<div class="empty">'+(S.items.length?T('Ничего не найдено'):T('Склад пуст 📦<br>Нажмите зелёную ＋ и добавьте первый товар'))+'</div>';
@@ -433,6 +501,7 @@ function stock(){
   };
   qi.oninput=function(e){q=e.target.value;var p=e.target.selectionStart;stock();var n=$('q');n.focus();n.setSelectionRange(p,p)};
   [].forEach.call(document.querySelectorAll('#app .chips .chip'),function(c){c.onclick=function(){cat=c.dataset.c;stock()}});
+  if($('tgst'))$('tgst').onclick=function(){tagsSheet(L)};
   if($('invst'))$('invst').onclick=function(){invMode=true;if(!S.inv){S.inv={t:Date.now(),by:ME?ME.name:'',c:{}};save()}invScreen()};
   $('app').onclick=function(e){
     var t=e.target.closest('[data-m],[data-p],[data-o],[data-f],[data-qs],[data-fa],[data-sv]');if(!t)return;
