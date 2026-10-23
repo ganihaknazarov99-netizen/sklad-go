@@ -271,7 +271,7 @@ function scanUI(mode,cb,cur){
   var attach=typeof cb==='function';mode=attach?'attach':(mode||scMode||'find');
   var modes=[['find','Найти'],['in','＋ Приход'],['out','− Расход']];
   open('<h2>'+T('Сканер штрихкода')+'</h2>'
-    +(attach?'':'<div class="chips" id="scm" style="margin:6px 0">'+modes.map(function(m){return '<div class="chip'+(m[0]===mode?' on':'')+'" data-sm="'+m[0]+'">'+T(m[1])+'</div>'}).join('')+'</div>')
+    +((attach||mode==='inv')?'':'<div class="chips" id="scm" style="margin:6px 0">'+modes.map(function(m){return '<div class="chip'+(m[0]===mode?' on':'')+'" data-sm="'+m[0]+'">'+T(m[1])+'</div>'}).join('')+'</div>')
     +'<div class="scbox" id="scbox"><div class="scmsg">'+T('Включаю камеру…')+'</div></div>'
     +'<div class="scr" id="scr">'+T('Наведите камеру на штрихкод')+'</div>'
     +'<div class="row"><input id="scx" inputmode="text" autocomplete="off" placeholder="'+T('Или введите номер вручную')+'" value="'+esc(cur||'')+'"><button class="go ac" id="scg" type="button" style="padding:10px">OK</button></div>'
@@ -282,6 +282,17 @@ function scanUI(mode,cb,cur){
     code=bcNorm(code);if(!code)return;buzz();
     if(attach){stopScan();cb(code);return}
     var it=byBc(code);
+    if(mode==='inv'){
+      if(!it){say('⚠️ '+T('Штрихкод не найден'),'bad');return}
+      if(!S.inv)S.inv={t:Date.now(),by:ME?ME.name:'',c:{}};
+      var was=S.inv.c[it.id];
+      S.inv.c[it.id]=(was===undefined?0:was)+1;
+      try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+      var d0=S.inv.c[it.id]-it.qty;
+      say('✓ '+esc(lab(it))+' → '+T('насчитано ')+S.inv.c[it.id]+T(' шт')+(d0?' ('+(d0>0?'+':'')+d0+')':T(' — сходится')),'ok');
+      invScreen();                       // обновляем список под окном сканера
+      return;
+    }
     if(mode==='find'){stopScan();close();if(it)sheet(it.id);else unknownBc(code);return}
     if(!it){stopScan();close();unknownBc(code);return}
     if(apply(it,mode,1,T('Скан'))){say('✓ '+esc(lab(it))+' → '+qt(it.qty,uOf(it)),'ok');render()}
@@ -352,7 +363,7 @@ function invScreen(){
   L.sort(function(a,b){return lab(a).localeCompare(lab(b),'ru')});
   var h=T('<h1>📋 Пересчёт склада</h1>');
   h+='<div class="panel"><b id="invh">'+invHead()+T('</b><br><small style="color:var(--mu)">Впишите, сколько насчитали на полке. Пустое поле — ещё не считали.</small></div>');
-  h+='<div class="srow">'+T('<input id="invq" type="search" placeholder="Поиск: название, размер, цвет…" value="')+esc(invQ)+'"></div>';
+  h+='<div class="srow">'+T('<input id="invq" type="search" placeholder="Поиск: название, размер, цвет…" value="')+esc(invQ)+'"><button class="scanb" id="invsc" type="button" aria-label="'+T('Сканер штрихкода')+'">▥</button></div>';
   if(!L.length)h+=T('<div class="empty">Ничего не найдено</div>');
   h+=L.map(function(i){
     var v=inv.c[i.id],d=(v===undefined)?null:(v-i.qty);
@@ -365,6 +376,7 @@ function invScreen(){
   h+=T('<button class="link" id="invx" style="display:block;margin:14px auto 0">Выйти и продолжить позже</button>');
   h+=T('<button class="link del" id="invc" style="display:block;margin:12px auto 0">Отменить пересчёт</button>');
   $('app').innerHTML=h;$('app').onclick=null;
+  $('invsc').onclick=function(){scanUI('inv')};
   $('invq').oninput=function(){invQ=this.value;invScreen();var e=$('invq');e.focus();e.setSelectionRange(e.value.length,e.value.length)};
   [].forEach.call(document.querySelectorAll('.invi'),function(el){
     el.oninput=function(){
