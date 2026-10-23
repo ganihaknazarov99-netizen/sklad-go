@@ -4,6 +4,7 @@ try{var r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
 S.trash=S.trash||[];S.biz=S.biz||'';S.items.forEach(function(i){if(i.ar===undefined)i.ar=i.qty<=0});
 var ME=null,sdb=null,staff=[],staffReady=false,D={people:[],ops:[]},dq='',dflt='all',ddb=null,dpend=null,dpending=false,dpushT,dmine=0;try{var dr=localStorage.getItem('skladgo.debts');if(dr)D=JSON.parse(dr)}catch(e){}
 try{ME=JSON.parse(localStorage.getItem('skladgo.me'))}catch(e){}
+var invMode=false,invQ='',invT=null;
 var dbd=null,pushT,pending=false,mine=0,pend=null,sy='',ltm='',myId=null,isOwn=false,actSeen=null,actList=[],lastSt='',seenT=0;
 try{seenT=+localStorage.getItem('skladgo.seen')||0;if(!seenT){seenT=Date.now();localStorage.setItem('skladgo.seen',seenT)}}catch(e){}
 function sytxt(){return sy==='ok'?T('🟢 сохранено ')+ltm:sy==='wait'?T('⏳ сохраняется…'):sy==='err'?T('⚠️ ошибка сохранения'):sy==='off'?T('⚠️ нет связи · данные на телефоне'):''}
@@ -89,8 +90,8 @@ function setSt(id,st){
 function itwho(i){return [i.ab?T('Добавил: ')+esc(i.ab)+' · '+dstr(i.ad):'',i.eb?T('Изменил: ')+esc(i.eb)+' · '+dstr(i.ed):'',i.lb?T('Операция: ')+esc(i.lb)+' · '+dstr(i.ld):''].filter(Boolean).join('<br>')}
 function remote(d,v){
   if(dirtyMain){mergeMainIn(d,v);render();doPush(0);return}
-  var c=clone(cleanMain(d));
-  S=c;S.items.forEach(function(i){if(i.ar===undefined)i.ar=i.qty<=0});
+  var c=clone(cleanMain(d)),keepInv=S.inv;
+  S=c;if(keepInv)S.inv=keepInv;S.items.forEach(function(i){if(i.ar===undefined)i.ar=i.qty<=0});
   if(v!=null)setVM(v);baseMain=clone(c);LSS('skladgo.base.main',JSON.stringify(baseMain));
   try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
   if(sy!=='wait'&&!anyDirty())setSy('ok');render();
@@ -297,13 +298,84 @@ function scanUI(mode,cb,cur){
   var go=function(){var v=$('scx').value.trim();if(attach){stopScan();cb(v);return}if(v)done(v)};
   $('scg').onclick=go;$('scx').onkeydown=function(e){if(e.key==='Enter')go()};
 }
+/* ===== Пересчёт склада (инвентаризация): обходим полки, вписываем факт,
+   в конце видим расхождения и применяем их одной кнопкой ===== */
+function invSum(){
+  var inv=S.inv||{c:{}},done=0,bad=0,dq=0,ds=0;
+  S.items.forEach(function(i){
+    var v=inv.c[i.id];if(v===undefined)return;done++;
+    var d=v-i.qty;if(d){bad++;dq+=d;ds+=d*(i.price||0)}
+  });
+  return {done:done,total:S.items.length,bad:bad,dq:dq,ds:ds};
+}
+function invHead(){
+  var s=invSum(),t=T('посчитано ')+s.done+T(' из ')+s.total;
+  if(!s.bad)return t+(s.done?T(' · расхождений нет'):'');
+  return t+T(' · расхождений: ')+s.bad+' · '+(s.dq>0?'+':'')+s.dq+T(' шт на ')+money(Math.abs(s.ds));
+}
+function invScreen(){
+  invMode=true;$('fab').style.display='none';
+  var inv=S.inv||{c:{}},qq=invQ.toLowerCase();
+  var L=S.items.filter(function(i){return !qq||lab(i).toLowerCase().indexOf(qq)>-1||(!!i.bc&&String(i.bc).indexOf(qq)>-1)});
+  L.sort(function(a,b){return lab(a).localeCompare(lab(b),'ru')});
+  var h=T('<h1>📋 Пересчёт склада</h1>');
+  h+='<div class="panel"><b id="invh">'+invHead()+T('</b><br><small style="color:var(--mu)">Впишите, сколько насчитали на полке. Пустое поле — ещё не считали.</small></div>');
+  h+='<div class="srow">'+T('<input id="invq" type="search" placeholder="Поиск: название, размер, цвет…" value="')+esc(invQ)+'"></div>';
+  if(!L.length)h+=T('<div class="empty">Ничего не найдено</div>');
+  h+=L.map(function(i){
+    var v=inv.c[i.id],d=(v===undefined)?null:(v-i.qty);
+    var mark=d===null?'':(d===0?' ✓':(d>0?' +'+d:' '+d));
+    var col=d===null?'var(--mu)':(d===0?'var(--in)':'var(--out)');
+    return '<div class="card"><div class="info"><b>'+esc(lab(i))+'</b><small>'+T('на складе: ')+i.qty+T(' шт')+'<span style="color:'+col+'">'+mark+'</span></small></div>'+
+      '<input class="invi" data-id="'+i.id+'" type="number" inputmode="numeric" placeholder="—" style="width:86px;text-align:center;font-weight:700"'+(v===undefined?'':' value="'+v+'"')+'></div>';
+  }).join('');
+  h+=T('<button class="go ac" id="invok" style="margin-top:14px">Применить пересчёт</button>');
+  h+=T('<button class="link" id="invx" style="display:block;margin:14px auto 0">Выйти и продолжить позже</button>');
+  h+=T('<button class="link del" id="invc" style="display:block;margin:12px auto 0">Отменить пересчёт</button>');
+  $('app').innerHTML=h;$('app').onclick=null;
+  $('invq').oninput=function(){invQ=this.value;invScreen();var e=$('invq');e.focus();e.setSelectionRange(e.value.length,e.value.length)};
+  [].forEach.call(document.querySelectorAll('.invi'),function(el){
+    el.oninput=function(){
+      if(!S.inv)S.inv={t:Date.now(),by:ME?ME.name:'',c:{}};
+      var id=el.dataset.id,t=el.value.trim();
+      if(t==='')delete S.inv.c[id];else S.inv.c[id]=Math.max(0,parseInt(t,10)||0);
+      $('invh').textContent=invHead();
+      clearTimeout(invT);invT=setTimeout(function(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}},600);
+    };
+  });
+  $('invok').onclick=invApply;
+  $('invx').onclick=function(){invMode=false;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}stock()};
+  $('invc').onclick=function(){
+    if(this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent=T('❗ Нажмите ещё раз — стереть посчитанное');return}
+    S.inv=null;invMode=false;save();toast(T('Пересчёт отменён'));stock();
+  };
+}
+function invApply(){
+  var s=invSum();
+  if(!s.done){toast(T('⚠️ Ещё ничего не посчитано'));return}
+  var b=$('invok');
+  if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent=s.bad?T('❗ Нажмите ещё раз — исправить остатки: ')+s.bad:T('❗ Нажмите ещё раз — расхождений нет');return}
+  var inv=S.inv||{c:{}},t=Date.now(),n=0;
+  S.items.forEach(function(i){
+    var v=inv.c[i.id];if(v===undefined)return;var d=v-i.qty;if(!d)return;
+    i.qty=v;i.ar=v<=0;i.lb=ME?ME.name:'';i.ld=t;
+    S.log.unshift({by:ME?ME.name:'',t:t,type:d>0?'in':'out',id:i.id,name:lab(i),qty:Math.abs(d),sum:0,note:T('Инвентаризация'),inv:1});
+    n++;
+  });
+  S.log=S.log.slice(0,400);S.inv=null;invMode=false;save();
+  logAct('провёл пересчёт склада, расхождений: '+n);
+  toast(n?T('✓ Пересчёт применён. Исправлено позиций: ')+n:T('✓ Пересчёт сошёлся, расхождений нет'));
+  render();
+}
 function stock(){
+  if(invMode){invScreen();return}
   var td=dkey(Date.now()),val=0,tot=0,inn=0,out=0,rev=0;
   S.items.forEach(function(i){val+=vOf(i);tot+=i.qty});
-  S.log.forEach(function(l){if(dkey(l.t)===td){if(l.type==='in')inn+=l.qty;else if(l.type==='out'){out+=l.qty;rev+=l.sum||0}}});
+  S.log.forEach(function(l){if(l.inv)return;if(dkey(l.t)===td){if(l.type==='in')inn+=l.qty;else if(l.type==='out'){out+=l.qty;rev+=l.sum||0}}});
   var h='<h1>'+LOGO+T('<small id="syi" style="display:inline;font-size:12px" title="Общий склад">')+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+T('</b><small>стоимость склада · ')+unitsTxt(S.items)+T(' · подробнее ›</small></div><div class="stat"><b>')+money(rev)+T('</b><small>продано сегодня</small></div><div class="stat"><b class="i">＋')+inn+T('</b><small>приход сегодня</small></div><div class="stat"><b class="o">−')+out+T('</b><small>расход сегодня</small></div></div>');
   h+='<div class="srow">'+T('<input id="q" type="search" placeholder="Поиск: название, размер, цвет…" value="')+esc(q)+'"><button class="scanb" id="scb" type="button" aria-label="'+T('Сканер штрихкода')+'">▥</button></div>';
   h+='<div class="chips">'+['Все','⚠️ Мало','🗄 Архив'].concat(S.cats).map(function(c){return '<div class="chip'+(c===cat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</div>'}).join('')+'</div>';
+  h+='<div style="text-align:right;margin:-2px 0 8px"><button class="link" id="invst">'+(S.inv?T('📋 Продолжить пересчёт'):T('📋 Пересчёт склада'))+'</button></div>';
   var L=S.items.filter(function(i){var arc=cat==='🗄 Архив';return(arc?!!i.ar:!i.ar)&&(cat==='Все'||arc||(cat==='⚠️ Мало'?i.qty<=3:i.cat===cat))&&(lab(i).toLowerCase().indexOf(q.toLowerCase())>-1||(!!i.bc&&String(i.bc).indexOf(q.trim())>-1))});
   L.sort(function(a,b){return lab(a).localeCompare(lab(b),'ru')});
   if(!L.length)h+='<div class="empty">'+(S.items.length?T('Ничего не найдено'):T('Склад пуст 📦<br>Нажмите зелёную ＋ и добавьте первый товар'))+'</div>';
@@ -317,6 +389,7 @@ function stock(){
   };
   qi.oninput=function(e){q=e.target.value;var p=e.target.selectionStart;stock();var n=$('q');n.focus();n.setSelectionRange(p,p)};
   [].forEach.call(document.querySelectorAll('#app .chips .chip'),function(c){c.onclick=function(){cat=c.dataset.c;stock()}});
+  if($('invst'))$('invst').onclick=function(){invMode=true;if(!S.inv){S.inv={t:Date.now(),by:ME?ME.name:'',c:{}};save()}invScreen()};
   $('app').onclick=function(e){
     var t=e.target.closest('[data-m],[data-p],[data-o],[data-f],[data-qs],[data-fa],[data-sv]');if(!t)return;
     if(t.dataset.sv){valueSheet();return}
@@ -566,7 +639,7 @@ function wstats(){
   for(i=0;i<n;i++){rev.push(0);qty.push(0)}
   var sold=0,sum=0,got=0,cost=0,top={},gm={},sm={};
   S.log.forEach(function(l){
-    if(l.t<start||l.t>end)return;
+    if(l.t<start||l.t>end||l.inv)return;
     if(l.type==='in'){got+=l.qty;var i0=find(l.id),u0=i0?uOf(i0):'шт';gm[u0]=(gm[u0]||0)+l.qty;return}
     if(l.type!=='out')return;
     var k=Math.min(n-1,Math.floor((l.t-start)/step));rev[k]+=l.sum||0;qty[k]+=l.qty;sold+=l.qty;sum+=l.sum||0;var ic0=find(l.id);cost+=((ic0&&ic0.cp)||0)*l.qty;
