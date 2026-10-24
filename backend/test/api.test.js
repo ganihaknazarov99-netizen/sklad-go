@@ -14,8 +14,8 @@ async function boot(extra) {
   };
   const lastCode = (to) => { const m = [...app.mailer.sent].reverse().find((x) => x.to === to); return /: ([A-Z0-9]{6})\n/.exec(m.text)[1]; };
   // регистрация + подтверждение + вход одной функцией
-  async function signup(email, name, pw = 'password123', phone = '+992901234567') {
-    const r = await call('POST', '/api/auth/register', { email, password: pw, name, phone });
+  async function signup(email, name, pw = 'password123', phone = '+992901234567', invite) {
+    const r = await call('POST', '/api/auth/register', { email, password: pw, name, phone, invite });
     assert.equal(r.status, 201, JSON.stringify(r.body));
     const v = await call('POST', '/api/auth/verify', { email, code: lastCode(email) });
     assert.equal(v.status, 200);
@@ -23,15 +23,72 @@ async function boot(extra) {
     assert.equal(l.status, 200);
     return { token: l.body.token, user: l.body.user };
   }
-  return { app, base, call, lastCode, signup };
+  // сотрудник того же магазина: берём код приглашения у владельца
+  async function signupStaff(owner, email, name) {
+    const inv = await call('GET', '/api/docs/meta/invite', undefined, owner.token);
+    assert.equal(inv.status, 200, 'владелец должен видеть код приглашения');
+    return signup(email, name, 'password123', '+992901234567', inv.body.data.code);
+  }
+  return { app, base, call, lastCode, signup, signupStaff };
 }
 
-test('первый пользователь становится владельцем, второй ждёт подтверждения', async () => {
+test('кто зарегистрировался сам — владелец своего магазина, чужого не видит', async () => {
+  const t = await boot();
+  const a = await t.signup('a@gmail.com', 'Гани');
+  const b = await t.signup('b@gmail.com', 'Фируз');
+  assert.equal(a.user.role, 'owner'); assert.equal(a.user.status, 'active');
+  assert.equal(b.user.role, 'owner'); assert.equal(b.user.status, 'active');
+
+  // первый заводит товар
+  await t.call('PUT', '/api/docs/warehouse/main', { data: { items: [{ id: 'x', name: 'Куртка', qty: 5 }], log: [] } }, a.token);
+  // второй о нём не знает: у него свой пустой склад
+  const forB = await t.call('GET', '/api/docs/warehouse/main', undefined, b.token);
+  assert.equal(forB.body.exists, false, 'сосед не должен видеть чужой склад');
+  // и в команде у каждого только он сам
+  const teamA = await t.call('GET', '/api/collections/staff', undefined, a.token);
+  const teamB = await t.call('GET', '/api/collections/staff', undefined, b.token);
+  assert.equal(teamA.body.docs.length, 1);
+  assert.equal(teamB.body.docs.length, 1);
+  assert.notEqual(teamA.body.docs[0].id, teamB.body.docs[0].id);
+  await t.app.close();
+});
+
+test('сотрудник приходит по ссылке-приглашению и попадает в тот же магазин', async () => {
   const t = await boot();
   const owner = await t.signup('owner@gmail.com', 'Гани');
-  assert.equal(owner.user.role, 'owner'); assert.equal(owner.user.status, 'active');
-  const staff = await t.signup('staff@gmail.com', 'Алишер');
+  const inv = await t.call('GET', '/api/docs/meta/invite', undefined, owner.token);
+  assert.equal(inv.status, 200);
+  const code = inv.body.data.code;
+  assert.ok(code && code.length >= 8, 'код приглашения должен быть');
+
+  const staff = await t.signup('staff@gmail.com', 'Алишер', 'password123', '+992901234567', code);
   assert.equal(staff.user.role, 'staff'); assert.equal(staff.user.status, 'pending');
+  assert.equal((await t.call('GET', '/api/docs/warehouse/main', undefined, staff.token)).status, 403);
+
+  await t.call('PUT', '/api/docs/warehouse/main', { data: { items: [{ id: 'x', qty: 7 }], log: [] } }, owner.token);
+  await t.call('PATCH', '/api/docs/staff/' + staff.user.id, { data: { status: 'active' } }, owner.token);
+  const seen = await t.call('GET', '/api/docs/warehouse/main', undefined, staff.token);
+  assert.equal(seen.body.data.items[0].qty, 7, 'после подтверждения сотрудник видит склад владельца');
+
+  // владелец видит в команде двоих, а код можно сменить — старый перестаёт работать
+  assert.equal((await t.call('GET', '/api/collections/staff', undefined, owner.token)).body.docs.length, 2);
+  const rot = await t.call('PATCH', '/api/docs/meta/invite', { data: {} }, owner.token);
+  assert.equal(rot.status, 200);
+  const r = await t.call('POST', '/api/auth/register', { email: 'late@gmail.com', password: 'password123', name: 'Поздний', invite: code });
+  assert.equal(r.status, 400, 'старое приглашение больше не действует');
+  await t.app.close();
+});
+
+test('сотрудник не может подсмотреть чужой магазин даже зная адрес', async () => {
+  const t = await boot();
+  const a = await t.signup('a@gmail.com', 'Гани');
+  const b = await t.signup('b@gmail.com', 'Фируз');
+  await t.call('PUT', '/api/docs/warehouse/debts', { data: { people: [{ id: 'p', name: 'Фируз' }], ops: [] } }, a.token);
+  await t.call('POST', '/api/collections/activity', { data: { txt: 'тайная запись' } }, a.token);
+  const debts = await t.call('GET', '/api/docs/warehouse/debts', undefined, b.token);
+  assert.equal(debts.body.exists, false);
+  const feed = await t.call('GET', '/api/collections/activity', undefined, b.token);
+  assert.equal(feed.body.docs.length, 0, 'лента соседа должна быть пустой');
   await t.app.close();
 });
 
@@ -68,7 +125,7 @@ test('ограничение попыток входа: 5 неудач блок�
 test('права: сотрудник без подтверждения не видит склад; после «Разрешить» работает', async () => {
   const t = await boot();
   const owner = await t.signup('owner@gmail.com', 'Гани');
-  const staff = await t.signup('staff@gmail.com', 'Алишер');
+  const staff = await t.signupStaff(owner, 'staff@gmail.com', 'Алишер');
   assert.equal((await t.call('GET', '/api/docs/warehouse/main', undefined, staff.token)).status, 403);
   assert.equal((await t.call('PUT', '/api/docs/warehouse/main', { data: { items: [] } }, staff.token)).status, 403);
   // сотрудник не может сам себя разрешить
@@ -86,7 +143,7 @@ test('права: сотрудник без подтверждения не ви
 test('закупочные цены: сотруднику не отдаются и не стираются его записью', async () => {
   const t = await boot();
   const owner = await t.signup('owner@gmail.com', 'Гани');
-  const staff = await t.signup('staff@gmail.com', 'Алишер');
+  const staff = await t.signupStaff(owner, 'staff@gmail.com', 'Алишер');
   await t.call('PATCH', '/api/docs/staff/' + staff.user.id, { data: { status: 'active' } }, owner.token);
 
   // владелец заводит товар с закупочной ценой
@@ -123,7 +180,7 @@ test('закупочные цены: сотруднику не отдаются 
 test('блокировка сотрудника закрывает доступ и завершает его сессии', async () => {
   const t = await boot();
   const owner = await t.signup('owner@gmail.com', 'Гани');
-  const staff = await t.signup('staff@gmail.com', 'Алишер');
+  const staff = await t.signupStaff(owner, 'staff@gmail.com', 'Алишер');
   await t.call('PATCH', '/api/docs/staff/' + staff.user.id, { data: { status: 'active' } }, owner.token);
   assert.equal((await t.call('GET', '/api/docs/warehouse/main', undefined, staff.token)).status, 200);
   await t.call('PATCH', '/api/docs/staff/' + staff.user.id, { data: { status: 'blocked' } }, owner.token);
@@ -134,8 +191,8 @@ test('блокировка сотрудника закрывает доступ 
 test('телефон и почта других сотрудников видит только владелец', async () => {
   const t = await boot();
   const owner = await t.signup('owner@gmail.com', 'Гани');
-  const s1 = await t.signup('s1@gmail.com', 'Один');
-  const s2 = await t.signup('s2@gmail.com', 'Два');
+  const s1 = await t.signupStaff(owner, 's1@gmail.com', 'Один');
+  const s2 = await t.signupStaff(owner, 's2@gmail.com', 'Два');
   for (const s of [s1, s2]) await t.call('PATCH', '/api/docs/staff/' + s.user.id, { data: { status: 'active' } }, owner.token);
   const asStaff = await t.call('GET', '/api/collections/staff', undefined, s1.token);
   const other = asStaff.body.docs.find((d) => d.id === s2.user.id).data;
@@ -182,7 +239,7 @@ test('посторонние пути и коллекции закрыты', asy
 test('сброс пароля по коду, выход и удаление аккаунта', async () => {
   const t = await boot();
   const owner = await t.signup('owner@gmail.com', 'Гани');
-  const u = await t.signup('user@gmail.com', 'Юзер');
+  const u = await t.signupStaff(owner, 'user@gmail.com', 'Юзер');
   await t.call('POST', '/api/auth/forgot', { email: 'user@gmail.com' });
   const rs = await t.call('POST', '/api/auth/reset', { email: 'user@gmail.com', code: t.lastCode('user@gmail.com'), newPassword: 'newpassword9' });
   assert.equal(rs.status, 200);
@@ -218,11 +275,14 @@ test('реальное время: подписчик получает собы�
   ac.abort(); await t.app.close();
 });
 
-test('владельца можно назначить по OWNER_EMAIL', async () => {
+test('OWNER_EMAIL закрывает сервер: чужие заходят только по приглашению', async () => {
   const t = await boot({ ownerEmail: 'boss@gmail.com' });
-  const first = await t.signup('first@gmail.com', 'Первый');
-  assert.equal(first.user.role, 'staff');
+  const no = await t.call('POST', '/api/auth/register', { email: 'first@gmail.com', password: 'password123', name: 'Первый' });
+  assert.equal(no.status, 403, 'посторонний не может завести свой магазин на закрытом сервере');
   const boss = await t.signup('boss@gmail.com', 'Босс');
   assert.equal(boss.user.role, 'owner');
+  const inv = await t.call('GET', '/api/docs/meta/invite', undefined, boss.token);
+  const staff = await t.signup('first@gmail.com', 'Первый', 'password123', '+992901234567', inv.body.data.code);
+  assert.equal(staff.user.role, 'staff');
   await t.app.close();
 });

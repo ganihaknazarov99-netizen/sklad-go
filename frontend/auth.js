@@ -136,7 +136,8 @@
     $('rb').onclick = function () { loginUI(); };
     $('rg').onclick = function () {
       var em = $('re').value.trim(), pw = $('rw').value; busy(this, true);
-      request('POST', '/api/auth/register', { name: $('rn').value.trim(), phone: $('rp').value.trim(), email: em, password: pw }, { noAuth: true })
+      var inviteCode = (/[?&#]invite=([A-Za-z0-9]+)/.exec(location.href) || [])[1] || '';
+      request('POST', '/api/auth/register', { name: $('rn').value.trim(), phone: $('rp').value.trim(), email: em, password: pw, invite: inviteCode }, { noAuth: true })
         .then(function (r) { if (r.verify) verifyUI(em, pw, false); else doLogin(em, pw).catch(showErr); })
         .catch(function (e) { busy($('rg'), false); showErr(e); });
     };
