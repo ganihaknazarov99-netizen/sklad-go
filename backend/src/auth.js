@@ -1,6 +1,7 @@
 'use strict';
 const { HttpError } = require('./http');
 const S = require('./security');
+const { newInvite } = require('./db');
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const PHONE_RE = /^\+?[0-9 ()-]{7,20}$/;
@@ -99,11 +100,27 @@ function makeAuth(ctx) {
         await issueCode(existing, 'verify');
         return { ok: true, verify: true };
       }
-      const first = db.prepare('SELECT COUNT(*) AS c FROM users').get().c === 0;
-      const isOwner = cfg.ownerEmail ? email === cfg.ownerEmail : first;
+      // Пришёл по ссылке-приглашению — попадает в тот магазин сотрудником.
+      // Пришёл сам — заводит свой магазин и становится в нём владельцем.
+      const invite = String(body.invite || '').trim().toUpperCase();
+      let shop = null;
+      if (invite) {
+        shop = db.prepare('SELECT * FROM shops WHERE invite=?').get(invite);
+        if (!shop) throw new HttpError(400, 'bad_invite');
+      } else if (cfg.ownerEmail && email !== cfg.ownerEmail) {
+        // сервер поднят под один магазин: чужие могут войти только по приглашению
+        throw new HttpError(403, 'invite_required');
+      }
+      const isOwner = !shop;
+      if (isOwner) {
+        const sid = S.newId();
+        db.prepare('INSERT INTO shops(id,name,invite,created_at) VALUES(?,?,?,?)')
+          .run(sid, name ? 'Магазин ' + name : '', newInvite(), now);
+        shop = { id: sid };
+      }
       const id = S.newId();
-      db.prepare('INSERT INTO users(id,email,pass_hash,name,phone,role,status,verified,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
-        .run(id, email, S.hashPassword(password), name, phone, isOwner ? 'owner' : 'staff', isOwner ? 'active' : 'pending', cfg.requireVerify ? 0 : 1, now, now);
+      db.prepare('INSERT INTO users(id,email,pass_hash,name,phone,role,status,verified,created_at,updated_at,shop_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+        .run(id, email, S.hashPassword(password), name, phone, isOwner ? 'owner' : 'staff', isOwner ? 'active' : 'pending', cfg.requireVerify ? 0 : 1, now, now, shop.id);
       audit(id, 'register', isOwner ? 'owner' : 'staff');
       const user = byId(id);
       if (cfg.requireVerify) await issueCode(user, 'verify');

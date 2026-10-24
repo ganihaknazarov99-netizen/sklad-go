@@ -4,7 +4,7 @@ try{var r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
 S.trash=S.trash||[];S.biz=S.biz||'';S.items.forEach(function(i){if(i.ar===undefined)i.ar=i.qty<=0});
 var ME=null,sdb=null,staff=[],staffReady=false,D={people:[],ops:[]},dq='',dflt='all',ddb=null,dpend=null,dpending=false,dpushT,dmine=0;try{var dr=localStorage.getItem('skladgo.debts');if(dr)D=JSON.parse(dr)}catch(e){}
 try{ME=JSON.parse(localStorage.getItem('skladgo.me'))}catch(e){}
-var invMode=false,invQ='',invT=null,ordCover=14;
+var invMode=false,invQ='',invT=null,ordCover=14,shopInvite=null;
 var dbd=null,pushT,pending=false,mine=0,pend=null,sy='',ltm='',myId=null,isOwn=false,actSeen=null,actList=[],lastSt='',seenT=0;
 try{seenT=+localStorage.getItem('skladgo.seen')||0;if(!seenT){seenT=Date.now();localStorage.setItem('skladgo.seen',seenT)}}catch(e){}
 function sytxt(){return sy==='ok'?T('🟢 сохранено ')+ltm:sy==='wait'?T('⏳ сохраняется…'):sy==='err'?T('⚠️ ошибка сохранения'):sy==='off'?T('⚠️ нет связи · данные на телефоне'):''}
@@ -1357,12 +1357,24 @@ function feedT(t){
   var out=t;for(var i=0;i<feedKeys.length;i++){var k=feedKeys[i];if(t.indexOf(k)===0){out=D[k]+t.slice(k.length);break}}
   return out.replace(/\((\d+) поз\.\)/,'($1 '+(D['поз']||'поз')+'.)').replace(/ шт\b/g,' '+(D['шт']||'шт'));
 }
+function inviteLink(){
+  var base=location.origin+location.pathname;
+  return base+(shopInvite?'?invite='+shopInvite:'');
+}
 function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h=T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
   if(window.skladAuth)h+=T('<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>')+(isOwn?'':T('<button class="link del" id="da">🗑 Удалить мой аккаунт</button>'))+'</div>';
   h+=T('<div class="lbl">🌐 Язык / Забон</div><div class="g2" id="lg" style="margin:4px 0 12px"><button data-lg="ru" style="')+(window.SKLAD_LANG==='ru'?'border-color:var(--ac);color:var(--ac)':'')+T('">Русский</button><button data-lg="tg" style="')+(window.SKLAD_LANG==='tg'?'border-color:var(--ac);color:var(--ac)':'')+T('">Тоҷикӣ</button></div>');
   if(isOwn)h+=T('<div class="lbl">💱 Валюта магазина</div><select id="cu">')+Object.keys(CURS).map(function(k){return '<option value="'+k+'"'+((S.cur||'TJS')===k?' selected':'')+'>'+CURS[k][window.SKLAD_LANG==='tg'?1:0]+'</option>'}).join('')+'</select>';
+  if(isOwn){
+    h+=T('<div class="panel"><h3>🔗 Ссылка для своих сотрудников</h3><small style="color:var(--mu)">Кто придёт по ней — попадёт в ваш магазин и будет ждать подтверждения. Кто зарегистрируется без неё — заведёт свой отдельный склад.</small>');
+    h+=shopInvite
+      ? '<div class="log" style="margin-top:8px"><div style="min-width:0"><b style="word-break:break-all;font-size:13px">'+esc(inviteLink())+T('</b><small>код: ')+esc(shopInvite)+'</small></div></div>'
+        +T('<button class="link" id="invcopy">📋 Скопировать ссылку</button> <button class="link del" id="invnew">Сменить код</button>')
+      : T('<div class="empty">Загружаю…</div>');
+    h+='</div>';
+  }
   if(isOwn)h+=T('<div class="lbl">🏪 Название магазина (подпись в сообщениях)</div><div class="row"><input id="bz" placeholder="Напр. Магазин Ганӣ" value="')+esc(S.biz||'')+T('"><button class="go ac" id="bzs" style="padding:10px;font-size:15px;margin-bottom:8px">Сохранить</button></div>');
   var pd=staff.filter(function(x){return x.status==='pending'}),ac=staff.filter(function(x){return x.status!=='pending'});
   if(isOwn&&pd.length)h+=T('<div class="lbl">Ждут подтверждения (')+pd.length+')</div>'+pd.map(function(x){return '<div class="card"><div class="info"><b>'+esc(x.name)+'</b><small>'+esc(x.phone)+' · '+esc(x.mail)+'</small></div><button class="link" data-ap="'+x._id+T('">✓ Разрешить</button><button class="link del" data-bl="')+x._id+'">✕</button></div>'}).join('');
@@ -1380,6 +1392,15 @@ function team(){
   };
   [].forEach.call(document.querySelectorAll('#lg button'),function(b){b.onclick=function(){if(b.dataset.lg!==window.SKLAD_LANG)setLang(b.dataset.lg)}});
   if($('cu'))$('cu').onchange=function(){S.cur=this.value;save();toast('✓ '+CL());render()};
+  if(isOwn&&shopInvite===null&&sdb){shopInvite='';sdb.doc('meta/invite').get().then(function(sn){shopInvite=(sn.data()||{}).code||'';if(tab==='team')team()},function(){shopInvite=''})}
+  if($('invcopy'))$('invcopy').onclick=function(){
+    var t=inviteLink();
+    try{navigator.clipboard.writeText(t).then(function(){toast(T('Ссылка скопирована — отправьте сотруднику'))},function(){showText(t)})}catch(e){showText(t)}
+  };
+  if($('invnew'))$('invnew').onclick=function(){
+    if(this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent=T('❗ Ещё раз — старая ссылка перестанет работать');return}
+    sdb.doc('meta/invite').update({}).then(function(r){shopInvite=(r&&r.code)||'';logAct('сменил ссылку-приглашение');toast(T('✓ Новый код готов'));team()},function(){toast(T('⚠️ Не удалось сменить код'))});
+  };
   if($('bzs'))$('bzs').onclick=function(){S.biz=$('bz').value.trim();save();logAct('изменил название магазина');toast(T('🏪 Сохранено'))};
   [].forEach.call(document.querySelectorAll('[data-ap]'),function(b){b.onclick=function(){setSt(b.dataset.ap,'active')}});
   [].forEach.call(document.querySelectorAll('[data-bl]'),function(b){b.onclick=function(){setSt(b.dataset.bl,'blocked')}});
