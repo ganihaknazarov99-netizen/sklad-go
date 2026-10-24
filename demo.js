@@ -94,9 +94,21 @@
     // Лента изменений в демо пополняется локально (на сервере это делает сам сервер).
     logAct = function (txt) { actList.unshift({ t: Date.now(), by: ME ? ME.name : '', txt: txt }); };
 
-    document.getElementById('demoreset').onclick = function () {
+    var wipe = function () {
       try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('skladgo.') === 0) localStorage.removeItem(k); }); } catch (e) {}
-      location.reload();
+    };
+    // «Сбросить» — вернуть показательные данные магазина
+    document.getElementById('demoreset').onclick = function () { wipe(); location.reload(); };
+    // «Начать свой склад» — пустой склад вместо чужих курток: метку засева ставим,
+    // а данные не кладём, поэтому при перезагрузке демо-товары не вернутся
+    document.getElementById('democlean').onclick = function () {
+      if (this.dataset.ok !== '1') { this.dataset.ok = '1'; this.textContent = 'Точно? Нажмите ещё раз'; return; }
+      wipe();
+      try {
+        localStorage.setItem('skladgo.demo.v1', '1');
+        localStorage.setItem('skladgo.me', JSON.stringify({ name: 'Хозяин', phone: '', mail: '' }));
+      } catch (e) {}
+      location.href = location.pathname;   // уходим с ?reset, иначе демо-данные вернутся
     };
 
     render();
