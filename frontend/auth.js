@@ -13,6 +13,9 @@
     weak_password: T('Пароль: минимум 8 символов, должны быть буквы и цифры'), bad_email: T('Проверьте адрес почты'), name_required: T('Введите имя'), bad_phone: T('Проверьте номер телефона'),
     code_wrong: T('Неверный код'), code_expired: T('Код не найден или истёк — запросите новый'), code_locked: T('Слишком много неверных попыток — запросите новый код'),
     mail_failed: T('Не удалось отправить письмо с кодом. Попробуйте через минуту или напишите владельцу'), too_soon: T('Подождите минуту перед повторной отправкой'), rate_limited: T('Слишком много попыток, подождите немного'), owner_cannot_delete: T('Владелец не может удалить аккаунт'),
+    bad_code: T('Неверный код из приложения'), pending_expired: T('Время вышло — введите пароль заново'),
+    too_many_codes: T('Слишком много неверных кодов — начните вход заново'), totp_already_on: T('Второй фактор уже включён'),
+    totp_not_started: T('Сначала получите секрет'), totp_off: T('Второй фактор выключен'),
     unauthorized: T('Нужно войти заново'), forbidden: T('Нет доступа'), too_large: T('Данные слишком большие'), server_error: T('Ошибка сервера, попробуйте позже'), network: T('Нет связи с сервером')
   };
   function ApiError(code, status, extra) { this.code = code; this.status = status; this.extra = extra || {}; this.message = ERR[code] || (T('Ошибка: ') + code); }
@@ -90,6 +93,13 @@
     return Promise.resolve(null);
   } };
   window.skladAuth = {
+    me: function () { return user; },
+    twoFactor: {
+      setup: function (password) { return request('POST', '/api/2fa/setup', { password: password }); },
+      enable: function (code) { return request('POST', '/api/2fa/enable', { code: code }).then(function (r) { if (r.user) user = r.user; return r; }); },
+      disable: function (password, code) { return request('POST', '/api/2fa/disable', { password: password, code: code }).then(function (r) { if (r.user) user = r.user; return r; }); },
+      newBackup: function (password) { return request('POST', '/api/2fa/backup', { password: password }); }
+    },
     signOut: function () { return request('POST', '/api/auth/logout', {}).catch(function () {}).then(function () { token = null; clearLocal(); location.reload(); }); },
     deleteAccount: function (password) { return request('DELETE', '/api/me', { password: password }).then(function () { token = null; clearLocal(); location.reload(); }); }
   };
@@ -124,9 +134,37 @@
   }
   function doLogin(email, pw) {
     return request('POST', '/api/auth/login', { email: email, password: pw }, { noAuth: true }).then(function (r) {
-      token = r.token; user = r.user; try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
-      startApp();
+      if (r.needTotp) { totpUI(r.pending, email); return; }   // пароль верен, нужен код из приложения
+      saveSession(r);
     });
+  }
+  function saveSession(r) {
+    token = r.token; user = r.user; try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+    startApp();
+  }
+  /* Второй шаг входа. Пароль уже принят, осталось подтвердить, что телефон — твой. */
+  function totpUI(pending, email) {
+    screen(T('<p>Введите код из приложения-аутентификатора. Если телефона нет под рукой — введите один из запасных кодов.</p>') +
+      field('t2', T('Код'), 'text', '123456', 'inputmode="numeric" autocomplete="one-time-code" maxlength="12"') +
+      '<div class="err" id="aerr"></div>' + T('<button class="go ac" id="t2go">Войти</button><button class="link" id="t2back">Назад</button>'));
+    $('t2').focus();
+    $('t2go').onclick = function () {
+      var code = $('t2').value.trim(); if (!code) { showErr({ message: T('Введите код') }); return; }
+      busy(this, true);
+      request('POST', '/api/auth/login-2fa', { pending: pending, code: code }, { noAuth: true })
+        .then(function (r) {
+          saveSession(r);
+          // Запасные коды кончаются незаметно — предупреждаем заранее
+          if (r.backupLeft != null && r.backupLeft <= 2) setTimeout(function () { try { toast(T('Запасных кодов осталось: ') + r.backupLeft); } catch (e) {} }, 1200);
+        })
+        .catch(function (e) {
+          busy($('t2go'), false);
+          if (e.code === 'pending_expired' || e.code === 'too_many_codes') loginUI(e.message, email);
+          else showErr(e);
+        });
+    };
+    $('t2').onkeydown = function (e) { if (e.key === 'Enter') $('t2go').click(); };
+    $('t2back').onclick = function () { loginUI('', email); };
   }
   function registerUI(msg) {
     screen(T('<p>Регистрация. На почту придёт код из 6 символов для подтверждения.</p>') +
@@ -164,14 +202,16 @@
     $('fb').onclick = function () { loginUI(); };
     $('fs').onclick = function () { var em = $('fe').value.trim(); busy(this, true); request('POST', '/api/auth/forgot', { email: em }, { noAuth: true }).then(function () { resetUI(em); }, function (e) { busy($('fs'), false); showErr(e); }); };
   }
+  // при включённом втором факторе сервер спросит и его — поле показываем сразу
   function resetUI(email) {
     screen(T('<p>Если такая почта есть, мы отправили код на <b>') + esc(email) + '</b>.</p>' +
       T('<input id="xc" maxlength="6" placeholder="КОД" style="text-transform:uppercase;letter-spacing:6px;font-size:22px;text-align:center">') + field('xw', T('Новый пароль (от 8 символов, буквы и цифры)'), 'password', '', 'autocomplete="new-password"') +
+      field('xt', T('Код из аутентификатора (если включён второй фактор)'), 'text', '123456', 'inputmode="numeric" maxlength="12"') +
       T('<div class="err" id="aerr"></div><button class="go ac" id="xs">Сменить пароль</button><button class="link" id="xb">Назад</button>'));
     $('xb').onclick = function () { loginUI('', email); };
     $('xs').onclick = function () {
       busy(this, true);
-      request('POST', '/api/auth/reset', { email: email, code: $('xc').value.trim().toUpperCase(), newPassword: $('xw').value }, { noAuth: true })
+      request('POST', '/api/auth/reset', { email: email, code: $('xc').value.trim().toUpperCase(), newPassword: $('xw').value, totp: $('xt').value.trim() }, { noAuth: true })
         .then(function () { loginUI(T('Пароль изменён — войдите'), email); }, function (e) { busy($('xs'), false); showErr(e); });
     };
   }
