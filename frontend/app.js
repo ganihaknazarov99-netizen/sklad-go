@@ -1392,10 +1392,15 @@ function twoFaSetup(){
   $('t2pw').onkeydown=function(e){if(e.key==='Enter')$('t2go').click()};
 }
 function twoFaShowSecret(r){
+  // QR нужен, когда склад открыт на компьютере, а телефон в руке: навёл — и готово.
+  // Свой же экран телефоном не сфотографируешь, поэтому там работает кнопка ниже.
+  var qr='';
+  try{ if(window.SkladQR) qr='<div style="text-align:center;margin:10px 0"><div style="display:inline-block;background:#fff;padding:10px;border-radius:12px;line-height:0">'+window.SkladQR.svg(r.uri,{scale:4})+'</div></div>'; }catch(e){}
   open('<h2>'+T('📱 Шаг 2: приложение')+'</h2>'
-    +T('<small style="margin:4px 0 10px">Поставьте Google Authenticator (или любой другой аутентификатор). Если открываете программу <b>на том же телефоне</b> — нажмите кнопку ниже, приложение откроется само. Если вы за компьютером — введите этот ключ в приложении руками.</small>')
+    +T('<small style="margin:4px 0 10px">Поставьте Google Authenticator (или любой другой аутентификатор). <b>За компьютером</b> — наведите телефон на этот квадрат. <b>На самом телефоне</b> квадрат не нужен: нажмите кнопку под ним, приложение откроется само.</small>')
+    +qr
     +'<a class="go ac" id="t2open" href="'+esc(r.uri)+'" style="display:block;text-align:center;text-decoration:none">'+T('Открыть приложение')+'</a>'
-    +T('<div class="lbl">Ключ для ручного ввода</div><div class="panel" style="font-family:monospace;font-size:15px;word-break:break-all;letter-spacing:1px">')+esc(r.secret)+'</div>'
+    +T('<div class="lbl">Если ни то, ни другое — впишите ключ руками</div><div class="panel" style="font-family:monospace;font-size:15px;word-break:break-all;letter-spacing:1px">')+esc(r.secret)+'</div>'
     +T('<button class="link" id="t2cps">📋 Скопировать ключ</button>')
     +T('<div class="lbl">Шаг 3: код из приложения</div><input id="t2c" inputmode="numeric" maxlength="6" placeholder="123456" style="letter-spacing:6px;font-size:22px;text-align:center"><div class="err" id="t2e"></div><button class="go ac" id="t2fin">Включить</button>'));
   $('t2cps').onclick=function(){dcopy(r.secret,T('✓ Ключ скопирован'))};
