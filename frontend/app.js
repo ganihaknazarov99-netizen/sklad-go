@@ -1447,6 +1447,48 @@ function twoFaNewCodes(){
   };
 }
 
+
+/* ---------- Кто заходил ----------
+   Сервер давно записывал каждый вход и каждый промах, но видеть их было негде.
+   А замечают, что пароль подбирают, именно по ним: три промаха ночью — повод
+   сменить пароль, пока не поздно. */
+var secLog=null;
+var SECW={login:'вошёл',login_backup:'вошёл по запасному коду',login_fail:'неверный пароль',totp_fail:'неверный код из приложения',
+  password_change:'сменил пароль',password_reset:'сбросил пароль',totp_on:'включил второй фактор',totp_off:'выключил второй фактор',
+  totp_backup_new:'выдал новые запасные коды',register:'зарегистрировался',verify:'подтвердил почту',staff_update:'изменил сотрудника',
+  invite_rotate:'сменил код приглашения',delete_account:'удалил аккаунт',admin_password:'пароль выдан с сервера',
+  admin_totp_off:'второй фактор снят с сервера',admin_backup_new:'запасные коды выданы с сервера',admin_unblock:'доступ открыт с сервера'};
+var SECIP={login:1,login_fail:1,login_backup:1,totp_fail:1};
+function secPanel(){
+  if(!isOwn||!window.skladAuth||!window.skladAuth.securityLog)return '';
+  var h=T('<div class="panel"><h3>🛡 Кто заходил</h3><small style="color:var(--mu)">Последние входы и неудачные попытки. Несколько промахов подряд — повод сменить пароль.</small>');
+  if(secLog===null)h+=T('<button class="link" id="secgo">Показать</button>');
+  else if(!secLog.length)h+=T('<div class="empty">Записей пока нет</div>');
+  else{
+    var плохо=secLog.filter(function(e){return e.action==='login_fail'||e.action==='totp_fail'}).length;
+    if(плохо)h+='<div class="log" style="margin-top:8px"><div><b>⚠️ '+T('Неудачных попыток: ')+плохо+T('</b><small>за последние ')+secLog.length+T(' записей</small></div></div>');
+    h+=secLog.slice(0,25).map(function(e){
+      var d=new Date(e.t),bad=e.action==='login_fail'||e.action==='totp_fail';
+      // Подробность показываем только там, где это адрес, с которого входили.
+      // У остальных записей в ней служебные номера — хозяину магазина они ни к чему.
+      var адрес=SECIP[e.action]&&e.detail?' · '+esc(e.detail):'';
+      return '<div class="log"><div style="min-width:0"><b'+(bad?' style="color:var(--out)"':'')+'>'+esc(e.name||e.email)+'</b><small>'+
+        T(SECW[e.action]||e.action)+адрес+'</small></div><span style="color:var(--mu);font-size:12px">'+
+        esc(dshort(e.t))+' '+esc(('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2))+'</span></div>';
+    }).join('');
+    h+=T('<button class="link" id="secgo">Обновить</button>');
+  }
+  return h+'</div>';
+}
+function secBind(){
+  var b=$('secgo');if(!b)return;
+  b.onclick=function(){
+    b.disabled=true;b.textContent=T('Загружаю…');
+    window.skladAuth.securityLog().then(function(r){secLog=r.events||[];if(tab==='team')team()},
+      function(e){b.disabled=false;b.textContent=T('Показать');toast('⚠️ '+((e&&e.message)||T('Не удалось')))});
+  };
+}
+
 function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h=T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
@@ -1454,6 +1496,7 @@ function team(){
   h+=T('<div class="lbl">🌐 Язык / Забон</div><div class="g2" id="lg" style="margin:4px 0 12px"><button data-lg="ru" style="')+(window.SKLAD_LANG==='ru'?'border-color:var(--ac);color:var(--ac)':'')+T('">Русский</button><button data-lg="tg" style="')+(window.SKLAD_LANG==='tg'?'border-color:var(--ac);color:var(--ac)':'')+T('">Тоҷикӣ</button></div>');
   if(isOwn)h+=T('<div class="lbl">💱 Валюта магазина</div><select id="cu">')+Object.keys(CURS).map(function(k){return '<option value="'+k+'"'+((S.cur||'TJS')===k?' selected':'')+'>'+CURS[k][window.SKLAD_LANG==='tg'?1:0]+'</option>'}).join('')+'</select>';
   h+=twoFaPanel();
+  h+=secPanel();
   if(isOwn){
     h+=T('<div class="panel"><h3>🔗 Ссылка для своих сотрудников</h3><small style="color:var(--mu)">Кто придёт по ней — попадёт в ваш магазин и будет ждать подтверждения. Кто зарегистрируется без неё — заведёт свой отдельный склад.</small>');
     h+=shopInvite
@@ -1477,6 +1520,7 @@ function team(){
     open(T('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Введите пароль для подтверждения. Данные склада останутся.</small><input id="dpw" type="password" placeholder="Пароль" autocomplete="current-password"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>'));
     $('dok').onclick=function(){window.skladAuth.deleteAccount($('dpw').value).catch(function(e){toast('⚠️ '+((e&&e.message)||T('Не удалось удалить')))})};
   };
+  secBind();
   if($('t2set'))$('t2set').onclick=twoFaSetup;
   if($('t2off'))$('t2off').onclick=twoFaOff;
   if($('t2new'))$('t2new').onclick=twoFaNewCodes;

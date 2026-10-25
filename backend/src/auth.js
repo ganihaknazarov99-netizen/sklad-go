@@ -300,6 +300,19 @@ function makeAuth(ctx) {
       audit(u.id, 'totp_backup_new', '');
       return { backup: issueBackup(u.id) };
     },
+    /* Журнал входов — владельцу своего магазина.
+       Сервер и раньше записывал каждый вход и каждую неудачную попытку, но
+       видеть их было негде. А замечают, что пароль подбирают, именно по ним. */
+    async securityLog(req) {
+      const u = requireUser(req);
+      if (u.role !== 'owner') throw new HttpError(403, 'forbidden');
+      const rows = db.prepare(`
+        SELECT a.t, a.action, a.detail, us.name, us.email
+        FROM audit a JOIN users us ON us.id = a.user_id
+        WHERE us.shop_id = ? AND a.action <> 'login_half'
+        ORDER BY a.t DESC LIMIT 60`).all(u.shop_id);
+      return { events: rows };
+    },
     async me(req) { return { user: publicUser(requireUser(req)) }; },
     async updateMe(req, body) {
       const u = requireUser(req), name = String(body.name == null ? u.name : body.name).trim().slice(0, 80);

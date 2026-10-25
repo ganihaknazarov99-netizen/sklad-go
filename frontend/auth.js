@@ -94,6 +94,7 @@
   } };
   window.skladAuth = {
     me: function () { return user; },
+    securityLog: function () { return request('GET', '/api/security'); },
     twoFactor: {
       // Программа открывается и без связи, по сохранённым данным. Если их не
       // обновить, назавтра она скажет, что второго фактора нет, хотя он есть.
