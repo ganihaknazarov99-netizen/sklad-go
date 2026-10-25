@@ -1493,6 +1493,7 @@ function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h=T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
   if(window.skladAuth)h+=T('<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>')+(isOwn?'':T('<button class="link del" id="da">🗑 Удалить мой аккаунт</button>'))+'</div>';
+  h+=T('<div class="lbl">🎨 Вид</div>')+chipsHtml('th',[['light',T('Светлый')],['dark',T('Тёмный')],['auto',T('Как на телефоне')]],window.SkladTheme?window.SkladTheme.get():'light')+'<div style="height:12px"></div>';
   h+=T('<div class="lbl">🌐 Язык / Забон</div><div class="g2" id="lg" style="margin:4px 0 12px"><button data-lg="ru" style="')+(window.SKLAD_LANG==='ru'?'border-color:var(--ac);color:var(--ac)':'')+T('">Русский</button><button data-lg="tg" style="')+(window.SKLAD_LANG==='tg'?'border-color:var(--ac);color:var(--ac)':'')+T('">Тоҷикӣ</button></div>');
   if(isOwn)h+=T('<div class="lbl">💱 Валюта магазина</div><select id="cu">')+Object.keys(CURS).map(function(k){return '<option value="'+k+'"'+((S.cur||'TJS')===k?' selected':'')+'>'+CURS[k][window.SKLAD_LANG==='tg'?1:0]+'</option>'}).join('')+'</select>';
   h+=twoFaPanel();
@@ -1525,6 +1526,7 @@ function team(){
   if($('t2off'))$('t2off').onclick=twoFaOff;
   if($('t2new'))$('t2new').onclick=twoFaNewCodes;
   [].forEach.call(document.querySelectorAll('#lg button'),function(b){b.onclick=function(){if(b.dataset.lg!==window.SKLAD_LANG)setLang(b.dataset.lg)}});
+  if(window.SkladTheme)bindChips('th',function(v){window.SkladTheme.set(v);render()});
   if($('cu'))$('cu').onchange=function(){S.cur=this.value;save();toast('✓ '+CL());render()};
   if(isOwn&&shopInvite===null&&sdb){shopInvite='';sdb.doc('meta/invite').get().then(function(sn){shopInvite=(sn.data()||{}).code||'';if(tab==='team')team()},function(){shopInvite=''})}
   if($('invcopy'))$('invcopy').onclick=function(){

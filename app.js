@@ -982,6 +982,7 @@ function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h='<h1>Команда</h1><div class="card"><div class="info"><b>'+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?'Владелец · ':'Сотрудник · ')+esc(ME.phone)+' · '+esc(ME.mail)+'</small></div><button class="link" id="me">Изменить</button></div>';
   if(window.skladAuth)h+='<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>'+(isOwn?'':'<button class="link del" id="da">🗑 Удалить мой аккаунт</button>')+'</div>';
+  h+='<div class="lbl">🎨 Вид</div>'+chipsHtml('th',[['light','Светлый'],['dark','Тёмный'],['auto','Как на телефоне']],window.SkladTheme?window.SkladTheme.get():'light')+'<div style="height:12px"></div>';
   if(isOwn)h+='<div class="lbl">🏪 Название магазина (подпись в сообщениях)</div><div class="row"><input id="bz" placeholder="Напр. Магазин Ганӣ" value="'+esc(S.biz||'')+'"><button class="go ac" id="bzs" style="padding:10px;font-size:15px;margin-bottom:8px">Сохранить</button></div>';
   var pd=staff.filter(function(x){return x.status==='pending'}),ac=staff.filter(function(x){return x.status!=='pending'});
   if(isOwn&&pd.length)h+='<div class="lbl">Ждут подтверждения ('+pd.length+')</div>'+pd.map(function(x){return '<div class="card"><div class="info"><b>'+esc(x.name)+'</b><small>'+esc(x.phone)+' · '+esc(x.mail)+'</small></div><button class="link" data-ap="'+x._id+'">✓ Разрешить</button><button class="link del" data-bl="'+x._id+'">✕</button></div>'}).join('');
@@ -992,6 +993,7 @@ function team(){
   if(!actList.length)h+='<div class="empty">Изменений пока нет</div>';
   h+=actList.slice(0,40).map(function(a){var d=new Date(a.t);return '<div class="log"><div><b>'+esc(a.by||'—')+'</b><small>'+esc(a.txt)+'</small></div><span style="color:var(--mu);font-size:12px;text-align:right">'+d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+'<br>'+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span></div>'}).join('');
   $('app').innerHTML=h;$('me').onclick=function(){gate(true)};
+  if(window.SkladTheme)bindChips('th',function(v){window.SkladTheme.set(v);render()});
   if($('lo'))$('lo').onclick=function(){if(anyDirty()&&this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Не всё отправлено! Нажмите ещё раз — выйти и потерять';return}window.skladAuth.signOut()};
   if($('da'))$('da').onclick=function(){
     open('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Вы выйдете из программы, и для возврата владельцу придётся заново подтвердить доступ. Данные склада и долгов останутся. Впишите слово <b>удалить</b> для подтверждения.</small><input id="dpw" placeholder="удалить" autocapitalize="none"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>');
