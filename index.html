@@ -116,7 +116,11 @@ input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:n
 <button class="fab" id="fab" style="display:none">＋</button>
 <nav id="nav"></nav>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<!-- Чужой скрипт с внешней раздачи. integrity — отпечаток файла: если раздачу
+     подменят, браузер его просто не выполнит, а не пустит чужой код на страницу. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
+        integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o"
+        crossorigin="anonymous"></script>
 <script src="merge.js"></script>
 <script src="config.js"></script>
 <!-- backend.js сам решает: сервер (config.js заполнен) или демо, и после входа грузит app.js -->
