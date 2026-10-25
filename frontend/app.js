@@ -1002,7 +1002,14 @@ function pasteTel(sel,inp){
   try{navigator.clipboard.readText().then(function(t){t=String(t||'').trim();if(!t){hint();return}$(inp).value=t;smartPh(sel,inp);toast(T('📋 Номер вставлен'))},hint)}catch(e){hint()}
 }
 function dpf(id){return D.people.filter(function(p){return p.id===id})[0]}
-function dbal(id){return D.ops.reduce(function(a,o){return o.pid===id?a+DT[o.type][1]*o.amt:a},0)}
+/* Остаток долга. Округление до копейки — не для красоты: дробные суммы
+   складываются неточно, и 85.10 + 220.20 − 305.30 даёт не ноль, а −0.00000000000006.
+   Без округления программа считала такой долг незакрытым и показывала, что
+   магазин должен человеку. Из-за этого в лавке и спорят. */
+function dbal(id){
+  var b=Math.round(D.ops.reduce(function(a,o){return o.pid===id?a+DT[o.type][1]*o.amt:a},0)*100)/100;
+  return b===0?0:b;   // иначе выходит «минус ноль» и на экране «−0 сомони»
+}
 function dlate(id){var b=dbal(id),td=lk(new Date()),m='';if(!b)return '';
   D.ops.forEach(function(o){if(o.pid===id&&o.due&&o.due<td&&((b>0&&o.type==='give')||(b<0&&o.type==='get'))&&(!m||o.due<m))m=o.due});var pp=dpf(id);if(pp&&pp.due&&pp.due<td&&(!m||pp.due<m))m=pp.due;return m}
 function dsave(){dpend=null;try{localStorage.setItem('skladgo.debts',JSON.stringify(D))}catch(e){}revDebts++;dirtyDebts=true;LSS('skladgo.dirty.debts','1');dpush()}
