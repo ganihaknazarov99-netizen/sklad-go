@@ -764,6 +764,12 @@ function wstats(){
   var ci=Object.keys(cats).map(function(k){return {n:k,v:cats[k]}}).sort(function(a,b){return b.v-a.v});
   var tk=Object.keys(top).sort(function(a,b){return top[b].q-top[a].q}).slice(0,8),mx=tk.length?top[tk[0]].q:1;
   var h=T('<h1>История</h1>')+hseg()+chipsHtml('wsm',[['rev','Выручка'],['qty','Штуки']],wsMet)+chipsHtml('wsp',[[7,T('7 дн.')],[30,T('30 дн.')],[90,T('90 дн.')],[365,'Год']],wsPer);
+  /* История хранится не вся: последние 400 записей. У бойкого магазина это
+     меньше месяца, и тогда «90 дней» или «год» показали бы пустоту, будто
+     торговля встала. Молчать об этом нельзя — цифры принимают за правду. */
+  var oldest=S.log.length?S.log[S.log.length-1].t:0;
+  if(S.log.length>=400&&oldest>start)
+    h+='<div class="panel" style="border-color:var(--wn,#b45309)"><small>⚠️ '+T('Программа хранит последние 400 записей — здесь показано с ')+esc(dkey(oldest))+T('. Если торговля шла и раньше, те продажи в эти цифры не вошли.')+'</small></div>';
   h+='<div class="panel"><small>'+(wsMet==='rev'?T('Продажи в день (в среднем)'):T('Продано штук в день (в среднем)'))+'</small><div style="font-size:26px;font-weight:800;color:'+col+';margin-bottom:6px">'+(wsMet==='rev'?money(avg):(Math.round(avg*10)/10)+T(' шт'))+'</div>'+lineSvg(pts,col)+(wsPer>120?T('<small>по неделям</small>'):'')+'</div>';
   h+='<div class="stats"><div class="stat s3"><b class="i">'+money(sum)+T('</b><small>продано · ')+mapTxt(sm)+'</small></div><div class="stat s3"><b>'+mapTxt(gm)+T('</b><small>приход за период</small></div><div class="stat s3"><b class="')+(low?'o':'')+'">'+low+T('</b><small>заканчивается (≤3 шт)</small></div><div class="stat s3"><b class="')+(np?'o':'')+'">'+np+T('</b><small>без цены (не в стоимости)</small></div></div>');
   if(isOwn){
