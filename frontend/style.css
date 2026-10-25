@@ -20,7 +20,9 @@ button{cursor:pointer}
 .info{flex:1;min-width:0}.info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 small{color:var(--mu);display:block}
 .ctl{display:flex;align-items:center;gap:4px}
-.ctl button{width:44px;height:44px;border-radius:12px;border:0;font-size:24px;font-weight:700;color:#fff}
+.ctl button{width:47px;height:50px;border-radius:12px;border:0;padding:0;font-size:21px;font-weight:700;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:1px}
+/* Подпись под знаком: чтобы «минус» нельзя было нажать, не поняв, что это продажа */
+.ctl button i{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.1px;opacity:1}
 .ctl .m{background:var(--out)}.ctl .p{background:var(--in)}.ctl .m:disabled{opacity:.3}
 .q{min-width:38px;text-align:center;font-size:22px;font-weight:800}.q.low{color:var(--warn)}
 .fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:32px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
