@@ -3,6 +3,9 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
+// Читаем те же настройки, что и сервер: у расписания своего окружения нет,
+// а путь к базе владелец может поменять.
+require('../src/config').loadEnv(path.join(__dirname, '..', '.env'));
 const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'skladgo.db');
 const dir = process.argv[2] || path.join(path.dirname(dbPath), 'backups');
 fs.mkdirSync(dir, { recursive: true });
