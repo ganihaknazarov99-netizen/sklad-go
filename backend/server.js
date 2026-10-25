@@ -32,7 +32,12 @@ function createApp(options = {}) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" + (cfg.corsOrigin ? ' ' + cfg.corsOrigin : '') + "; frame-ancestors 'none'; base-uri 'none'");
+    // Год на HTTPS. По обычному http браузер эту строку игнорирует, поэтому дома она не помешает.
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    // Камера нужна сканеру штрихкодов, остальное ни к чему
+    res.setHeader('Permissions-Policy', 'camera=(self), geolocation=(), microphone=(), payment=()');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" + (cfg.corsOrigin ? ' ' + cfg.corsOrigin : '') + "; object-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
   }
 
   async function api(req, res, url) {
@@ -43,7 +48,12 @@ function createApp(options = {}) {
     if (m === 'POST' && p === '/api/auth/verify') return send(res, 200, await A.verify(req, body, ip));
     if (m === 'POST' && p === '/api/auth/resend') return send(res, 200, await A.resend(req, body, ip));
     if (m === 'POST' && p === '/api/auth/login') return send(res, 200, await A.login(req, body, ip));
+    if (m === 'POST' && p === '/api/auth/login-2fa') return send(res, 200, await A.login2fa(req, body, ip));
     if (m === 'POST' && p === '/api/auth/logout') return send(res, 200, await A.logout(req));
+    if (m === 'POST' && p === '/api/2fa/setup') return send(res, 200, await A.totpSetup(req, body));
+    if (m === 'POST' && p === '/api/2fa/enable') return send(res, 200, await A.totpEnable(req, body, ip));
+    if (m === 'POST' && p === '/api/2fa/disable') return send(res, 200, await A.totpDisable(req, body, ip));
+    if (m === 'POST' && p === '/api/2fa/backup') return send(res, 200, await A.totpBackup(req, body));
     if (m === 'POST' && p === '/api/auth/forgot') return send(res, 200, await A.forgot(req, body, ip));
     if (m === 'POST' && p === '/api/auth/reset') return send(res, 200, await A.reset(req, body, ip));
     if (m === 'POST' && p === '/api/auth/change-password') return send(res, 200, await A.changePassword(req, body));
@@ -79,6 +89,8 @@ function createApp(options = {}) {
     if (rel.endsWith('/')) rel += 'index.html';
     const file = path.normalize(path.join(cfg.staticDir, rel));
     if (!file.startsWith(path.normalize(cfg.staticDir + path.sep))) return send(res, 403, { error: 'forbidden' });
+    // ничего, что начинается с точки: .env, .git и прочее наружу не отдаём
+    if (rel.split(/[\/]/).some((part) => part.startsWith('.'))) return send(res, 403, { error: 'forbidden' });
     fs.readFile(file, (err, buf) => {
       if (err) { // запасной вариант: отдаём index.html
         return fs.readFile(path.join(cfg.staticDir, 'index.html'), (e2, b2) => {
@@ -116,8 +128,25 @@ function createApp(options = {}) {
 
 module.exports = { createApp };
 
+/* Перед запуском смотрим, не выставлено ли наружу лишнее. Одна опечатка в DB_PATH —
+   и база со всеми паролями и закупочными ценами качается по ссылке, молча. */
+function checkSafety(cfg) {
+  const inStatic = path.normalize(path.resolve(cfg.dbPath)).startsWith(path.normalize(path.resolve(cfg.staticDir) + path.sep));
+  if (inStatic) {
+    console.error('ОСТАНОВЛЕНО: база ' + cfg.dbPath + ' лежит в папке, которую сервер раздаёт наружу.');
+    console.error('Её смог бы скачать кто угодно. Перенесите базу (DB_PATH) за пределы ' + cfg.staticDir);
+    process.exit(1);
+  }
+  const warn = [];
+  if (cfg.devMailbox) warn.push('DEV_MAILBOX=true — коды из писем видны по ссылке /api/dev/mailbox. Для рабочего сервера поставьте false.');
+  if (!cfg.ownerEmail) warn.push('OWNER_EMAIL не задан — любой человек с адресом сервера заведёт себе магазин. Так и задумано для общего сервера; для своего укажите свою почту.');
+  if (cfg.sessionDays > 90) warn.push('SESSION_DAYS=' + cfg.sessionDays + ' — вход не кончается больше трёх месяцев.');
+  for (const w of warn) console.log('ВНИМАНИЕ: ' + w);
+}
+
 if (require.main === module) {
   loadEnv(path.join(__dirname, '.env'));
+  checkSafety(makeConfig());   // до открытия базы: иначе опасный файл успеет создаться
   const app = createApp();
   app.listen().then((port) => {
     console.log(`Sklad Go запущен: http://localhost:${port}`);

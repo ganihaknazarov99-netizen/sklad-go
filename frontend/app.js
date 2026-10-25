@@ -1361,12 +1361,82 @@ function inviteLink(){
   var base=location.origin+location.pathname;
   return base+(shopInvite?'?invite='+shopInvite:'');
 }
+/* ---------- Второй фактор входа (вкладка «Команда») ----------
+   Пароль можно подсмотреть или угадать. Второй фактор — шестизначный код,
+   который живёт полминуты и считается прямо в телефоне, без интернета и СМС. */
+function twoFaOn(){var m=window.skladAuth&&window.skladAuth.me&&window.skladAuth.me();return !!(m&&m.totp)}
+function twoFaPanel(){
+  if(!window.skladAuth||!window.skladAuth.twoFactor)return '';
+  var on=twoFaOn();
+  return T('<div class="panel"><h3>🔐 Второй фактор входа</h3><small style="color:var(--mu)">Чтобы одного пароля было мало: при входе программа спросит код из приложения-аутентификатора.</small>')
+    +'<div class="log" style="margin-top:8px"><div><b>'+(on?T('Включён'):T('Выключен'))+'</b><small>'
+    +(on?T('Вход в два шага'):T('Вход только по паролю'))+'</small></div><span>'+(on?'🟢':'⚪')+'</span></div>'
+    +(on?T('<button class="link" id="t2new">Новые запасные коды</button> <button class="link del" id="t2off">Выключить</button>')
+        :T('<button class="link" id="t2set">Включить</button>'))
+    +'</div>';
+}
+// Показываем запасные коды. Один раз: на сервере от них остались только хеши.
+function twoFaCodes(codes,head){
+  open('<h2>'+T('🔑 Запасные коды')+'</h2>'+T('<small style="margin:4px 0 10px">')+esc(head||T('Телефон теряют и меняют. Эти коды — ваш способ войти без него. Каждый работает один раз. Запишите их на бумагу и держите не в телефоне.'))+'</small>'
+    +'<div class="panel" style="font-family:monospace;font-size:17px;line-height:1.9;letter-spacing:1px;text-align:center">'+codes.map(esc).join('<br>')+'</div>'
+    +T('<button class="link" id="t2cp">📋 Скопировать</button><button class="go ac" id="t2done">Записал, закрыть</button>'));
+  $('t2cp').onclick=function(){copy(codes.join('\n'));toast(T('✓ Скопировано'))};
+  $('t2done').onclick=function(){close();render()};
+}
+function twoFaSetup(){
+  open('<h2>'+T('🔐 Включить второй фактор')+'</h2>'+T('<small style="margin:4px 0 10px">Для начала подтвердите пароль — чтобы чужой человек с вашего телефона не запер вас самих.</small><input id="t2pw" type="password" placeholder="Пароль" autocomplete="current-password"><div class="err" id="t2e"></div><button class="go ac" id="t2go">Далее</button>'));
+  $('t2go').onclick=function(){
+    var b=this;b.disabled=true;
+    window.skladAuth.twoFactor.setup($('t2pw').value).then(function(r){twoFaShowSecret(r)},function(e){b.disabled=false;$('t2e').textContent=(e&&e.message)||T('Не удалось')});
+  };
+  $('t2pw').onkeydown=function(e){if(e.key==='Enter')$('t2go').click()};
+}
+function twoFaShowSecret(r){
+  // QR нужен, когда склад открыт на компьютере, а телефон в руке: навёл — и готово.
+  // Свой же экран телефоном не сфотографируешь, поэтому там работает кнопка ниже.
+  var qr='';
+  try{ if(window.SkladQR) qr='<div style="text-align:center;margin:10px 0"><div style="display:inline-block;background:#fff;padding:10px;border-radius:12px;line-height:0">'+window.SkladQR.svg(r.uri,{scale:4})+'</div></div>'; }catch(e){}
+  open('<h2>'+T('📱 Шаг 2: приложение')+'</h2>'
+    +T('<small style="margin:4px 0 10px">Поставьте Google Authenticator (или любой другой аутентификатор). <b>За компьютером</b> — наведите телефон на этот квадрат. <b>На самом телефоне</b> квадрат не нужен: нажмите кнопку под ним, приложение откроется само.</small>')
+    +qr
+    +'<a class="go ac" id="t2open" href="'+esc(r.uri)+'" style="display:block;text-align:center;text-decoration:none">'+T('Открыть приложение')+'</a>'
+    +T('<div class="lbl">Если ни то, ни другое — впишите ключ руками</div><div class="panel" style="font-family:monospace;font-size:15px;word-break:break-all;letter-spacing:1px">')+esc(r.secret)+'</div>'
+    +T('<button class="link" id="t2cps">📋 Скопировать ключ</button>')
+    +T('<div class="lbl">Шаг 3: код из приложения</div><input id="t2c" inputmode="numeric" maxlength="6" placeholder="123456" style="letter-spacing:6px;font-size:22px;text-align:center"><div class="err" id="t2e"></div><button class="go ac" id="t2fin">Включить</button>'));
+  $('t2cps').onclick=function(){dcopy(r.secret,T('✓ Ключ скопирован'))};
+  $('t2fin').onclick=function(){
+    var b=this;b.disabled=true;
+    window.skladAuth.twoFactor.enable($('t2c').value.trim()).then(function(res){
+      logAct(T('включил второй фактор входа'));
+      twoFaCodes(res.backup,T('Готово, второй фактор включён. Теперь запишите запасные коды — без них потерянный телефон закроет вам вход навсегда.'));
+    },function(e){b.disabled=false;$('t2e').textContent=(e&&e.message)||T('Код не подошёл')});
+  };
+  $('t2c').onkeydown=function(e){if(e.key==='Enter')$('t2fin').click()};
+}
+function twoFaOff(){
+  open('<h2>'+T('Выключить второй фактор')+'</h2>'+T('<small style="margin:4px 0 10px">Нужен пароль и код из приложения (или запасной код). После этого вход будет только по паролю.</small><input id="t2pw" type="password" placeholder="Пароль" autocomplete="current-password"><input id="t2c" placeholder="Код" inputmode="numeric" maxlength="12"><div class="err" id="t2e"></div><button class="go ac" id="t2go" style="background:var(--out)">Выключить</button>'));
+  $('t2go').onclick=function(){
+    var b=this;b.disabled=true;
+    window.skladAuth.twoFactor.disable($('t2pw').value,$('t2c').value.trim()).then(function(){
+      logAct(T('выключил второй фактор входа'));close();toast(T('Второй фактор выключен'));render();
+    },function(e){b.disabled=false;$('t2e').textContent=(e&&e.message)||T('Не удалось')});
+  };
+}
+function twoFaNewCodes(){
+  open('<h2>'+T('Новые запасные коды')+'</h2>'+T('<small style="margin:4px 0 10px">Старые перестанут работать. Подтвердите пароль.</small><input id="t2pw" type="password" placeholder="Пароль" autocomplete="current-password"><div class="err" id="t2e"></div><button class="go ac" id="t2go">Выдать новые</button>'));
+  $('t2go').onclick=function(){
+    var b=this;b.disabled=true;
+    window.skladAuth.twoFactor.newBackup($('t2pw').value).then(function(r){twoFaCodes(r.backup)},function(e){b.disabled=false;$('t2e').textContent=(e&&e.message)||T('Не удалось')});
+  };
+}
+
 function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h=T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
   if(window.skladAuth)h+=T('<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>')+(isOwn?'':T('<button class="link del" id="da">🗑 Удалить мой аккаунт</button>'))+'</div>';
   h+=T('<div class="lbl">🌐 Язык / Забон</div><div class="g2" id="lg" style="margin:4px 0 12px"><button data-lg="ru" style="')+(window.SKLAD_LANG==='ru'?'border-color:var(--ac);color:var(--ac)':'')+T('">Русский</button><button data-lg="tg" style="')+(window.SKLAD_LANG==='tg'?'border-color:var(--ac);color:var(--ac)':'')+T('">Тоҷикӣ</button></div>');
   if(isOwn)h+=T('<div class="lbl">💱 Валюта магазина</div><select id="cu">')+Object.keys(CURS).map(function(k){return '<option value="'+k+'"'+((S.cur||'TJS')===k?' selected':'')+'>'+CURS[k][window.SKLAD_LANG==='tg'?1:0]+'</option>'}).join('')+'</select>';
+  h+=twoFaPanel();
   if(isOwn){
     h+=T('<div class="panel"><h3>🔗 Ссылка для своих сотрудников</h3><small style="color:var(--mu)">Кто придёт по ней — попадёт в ваш магазин и будет ждать подтверждения. Кто зарегистрируется без неё — заведёт свой отдельный склад.</small>');
     h+=shopInvite
@@ -1390,6 +1460,9 @@ function team(){
     open(T('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Введите пароль для подтверждения. Данные склада останутся.</small><input id="dpw" type="password" placeholder="Пароль" autocomplete="current-password"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>'));
     $('dok').onclick=function(){window.skladAuth.deleteAccount($('dpw').value).catch(function(e){toast('⚠️ '+((e&&e.message)||T('Не удалось удалить')))})};
   };
+  if($('t2set'))$('t2set').onclick=twoFaSetup;
+  if($('t2off'))$('t2off').onclick=twoFaOff;
+  if($('t2new'))$('t2new').onclick=twoFaNewCodes;
   [].forEach.call(document.querySelectorAll('#lg button'),function(b){b.onclick=function(){if(b.dataset.lg!==window.SKLAD_LANG)setLang(b.dataset.lg)}});
   if($('cu'))$('cu').onchange=function(){S.cur=this.value;save();toast('✓ '+CL());render()};
   if(isOwn&&shopInvite===null&&sdb){shopInvite='';sdb.doc('meta/invite').get().then(function(sn){shopInvite=(sn.data()||{}).code||'';if(tab==='team')team()},function(){shopInvite=''})}

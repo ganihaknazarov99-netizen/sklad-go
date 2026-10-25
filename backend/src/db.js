@@ -27,6 +27,13 @@ CREATE TABLE IF NOT EXISTS codes(
   PRIMARY KEY(user_id, purpose),
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS backup_codes(
+  user_id TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  used_at INTEGER,
+  PRIMARY KEY(user_id, code_hash),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS sessions(
   token_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -78,6 +85,13 @@ function newInvite() { return S.newToken().slice(0, 10).toUpperCase(); }
 
 function migrate(db) {
   const cols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  // Второй фактор входа: секрет аутентификатора и номер последнего использованного окна
+  // (чтобы подсмотренный через плечо код не прошёл во второй раз).
+  if (!cols.includes('totp_secret')) {
+    db.exec("ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT ''");
+    db.exec('ALTER TABLE users ADD COLUMN totp_on INTEGER NOT NULL DEFAULT 0');
+    db.exec('ALTER TABLE users ADD COLUMN totp_step INTEGER NOT NULL DEFAULT -1');
+  }
   if (!cols.includes('shop_id')) {
     db.exec("ALTER TABLE users ADD COLUMN shop_id TEXT NOT NULL DEFAULT ''");
     db.exec('CREATE INDEX IF NOT EXISTS idx_users_shop ON users(shop_id)');
