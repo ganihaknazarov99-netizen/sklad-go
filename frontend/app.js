@@ -122,7 +122,11 @@ function meta(i){return [i.cat,i.size,i.color].filter(Boolean).map(esc).join(' �
 function lab(i){return i.name+(i.size?' · '+i.size:'')+(i.color?' · '+i.color:'')}
 var CURS={TJS:['сомони','сомонӣ'],UZS:['сум','сўм'],KZT:['тенге','тенге'],KGS:['сом','сом'],RUB:['руб.','рубл'],USD:['$','доллар']};
 function CL(){var c=CURS[S.cur]||CURS.TJS;return c[window.SKLAD_LANG==='tg'?1:0]}
-function money(n){var r=Math.round((+n||0)*100)/100;return r.toLocaleString('ru-RU',{maximumFractionDigits:2})+' '+CL()}
+function money(n){
+  var r=Math.round((+n||0)*100)/100;
+  if(r===0)r=0;   // иначе выходит «−0 сомони»: минус там, где всё сошлось
+  return r.toLocaleString('ru-RU',{maximumFractionDigits:2})+' '+CL();
+}
 function dkey(t){return new Date(t).toLocaleDateString('ru-RU')}
 function buzz(){try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}}
 
