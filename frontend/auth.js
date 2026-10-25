@@ -95,9 +95,12 @@
   window.skladAuth = {
     me: function () { return user; },
     twoFactor: {
+      // Программа открывается и без связи, по сохранённым данным. Если их не
+      // обновить, назавтра она скажет, что второго фактора нет, хотя он есть.
+      _save: function (u) { user = u; try { localStorage.setItem('skladgo.user', JSON.stringify(u)); } catch (e) {} },
       setup: function (password) { return request('POST', '/api/2fa/setup', { password: password }); },
-      enable: function (code) { return request('POST', '/api/2fa/enable', { code: code }).then(function (r) { if (r.user) user = r.user; return r; }); },
-      disable: function (password, code) { return request('POST', '/api/2fa/disable', { password: password, code: code }).then(function (r) { if (r.user) user = r.user; return r; }); },
+      enable: function (code) { var self = this; return request('POST', '/api/2fa/enable', { code: code }).then(function (r) { if (r.user) self._save(r.user); return r; }); },
+      disable: function (password, code) { var self = this; return request('POST', '/api/2fa/disable', { password: password, code: code }).then(function (r) { if (r.user) self._save(r.user); return r; }); },
       newBackup: function (password) { return request('POST', '/api/2fa/backup', { password: password }); }
     },
     signOut: function () { return request('POST', '/api/auth/logout', {}).catch(function () {}).then(function () { token = null; clearLocal(); location.reload(); }); },
