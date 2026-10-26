@@ -149,26 +149,31 @@ test('примечание и срок править можно: это не д
   assert.equal((await t.читать(own)).data.ops[0].note, 'Куртка зимняя, чёрная');
 });
 
-test('правило одно для всех: владелец тоже не переписывает молча', async (ctx) => {
+test('владелец восстанавливает из копии, и это записывается в журнал', async (ctx) => {
   const t = await boot(ctx);
   const own = await t.signup('gani@shop.tj', 'Гани');
   await t.писать(own, начальные('Гани'));
 
+  /* Запрещать владельцу нельзя: восстановление из файла заменяет записи
+     целиком, и строгое правило сломало бы его. Но молчать тоже нельзя. */
   const d = await t.читать(own);
   d.data.ops[0].amt = 1;
-  const r = await t.писать(own, d.data);
-  assert.equal(r.status, 409, 'это не про недоверие к хозяину, а про честность записей');
+  assert.equal((await t.писать(own, d.data)).status, 200);
+
+  const ж = await t.call('GET', '/api/security', undefined, own.token);
+  assert.ok(ж.body.events.some((e) => e.action === 'debts_rewrite'), 'след должен остаться');
 });
 
 test('перенести долг на другого человека задним числом нельзя', async (ctx) => {
   const t = await boot(ctx);
   const own = await t.signup('gani@shop.tj', 'Гани');
+  const emp = await t.signupStaff(own, 'alisher@shop.tj', 'Алишер');
   await t.писать(own, начальные('Гани'));
 
-  const d = await t.читать(own);
+  const d = await t.читать(emp);
   d.data.people.push({ id: 'p2', name: 'Мадина' });
   d.data.ops[0].pid = 'p2';
-  const r = await t.писать(own, d.data);
+  const r = await t.писать(emp, d.data);
   assert.equal(r.status, 409);
   assert.equal(r.body.error, 'debt_changed');
 });
@@ -176,11 +181,12 @@ test('перенести долг на другого человека задн�
 test('дату записи задним числом не сдвинуть', async (ctx) => {
   const t = await boot(ctx);
   const own = await t.signup('gani@shop.tj', 'Гани');
+  const emp = await t.signupStaff(own, 'alisher@shop.tj', 'Алишер');
   await t.писать(own, начальные('Гани'));
 
-  const d = await t.читать(own);
+  const d = await t.читать(emp);
   d.data.ops[0].t = Date.now();
-  assert.equal((await t.писать(own, d.data)).status, 409, 'сдвиг даты меняет просрочку и пени');
+  assert.equal((await t.писать(emp, d.data)).status, 409, 'сдвиг даты меняет просрочку и пени');
 });
 
 test('чужой магазин этим правилом не задет', async (ctx) => {

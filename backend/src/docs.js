@@ -42,6 +42,47 @@ function makeDocs(ctx) {
        человеку больше не выйдет.
 
      Примечания, сроки и расчёты править можно — это не деньги. */
+  /* ---------- История склада: продажи не переписываются ----------
+     У записей истории нет своего номера, поэтому узнаём их по тому, что
+     в них неизменного: время, тип, товар, количество и сумма.
+
+     Исчезнуть запись может по двум законным причинам:
+     • «Отменить» сразу после ошибки — узкое окно в десять минут;
+     • история переполнилась и самое старое вытеснилось. Вытеснение
+       засчитываем, только если история пришла полной: иначе достаточно
+       было бы прислать одну запись, чтобы «состарить» все остальные.
+
+     Автора новой записи ставит сервер. */
+  const ПРЕДЕЛ_ИСТОРИИ = 400;
+  const ОКНО_ОТМЕНЫ = 10 * 60 * 1000;
+  const ключЗаписи = (l) => [l.t, l.type, l.id, l.qty, l.sum].join('|');
+
+  function guardStock(next, prev, user) {
+    const было = prev && prev.log || [];
+    if (!было.length) return next;
+    const стало = next.log || [];
+    const ключи = new Set(стало.map(ключЗаписи));
+    const самаяСтарая = стало.length ? Math.min(...стало.map((l) => +l.t || 0)) : Infinity;
+    const полная = стало.length >= ПРЕДЕЛ_ИСТОРИИ;
+    const сейчас = Date.now();
+    const хозяин = user.role === 'owner';
+    let переписано = 0;
+
+    for (const l of было) {
+      if (ключи.has(ключЗаписи(l))) continue;
+      const вытеснена = полная && +l.t < самаяСтарая;
+      const свежая = сейчас - (+l.t || 0) < ОКНО_ОТМЕНЫ;
+      if (вытеснена || свежая) continue;
+      if (!хозяин) throw new HttpError(409, 'log_vanished', { t: l.t, name: l.name });
+      переписано++;
+    }
+    if (переписано) auth.audit(user.id, 'log_rewrite', 'записей: ' + переписано);
+
+    const старые = new Set(было.map(ключЗаписи));
+    for (const l of стало) if (!старые.has(ключЗаписи(l))) l.by = user.name;
+    return next;
+  }
+
   function guardDebts(next, prev, user) {
     const было = new Map((prev && prev.ops || []).map((o) => [o.id, o]));
     const стало = new Map((next.ops || []).map((o) => [o.id, o]));
@@ -54,16 +95,29 @@ function makeDocs(ctx) {
       if (x.k === 'person') for (const o of x.ops || []) if (o && o.id) вКорзине.add(o.id);
     }
 
+    /* Владельцу запрещать нельзя: он восстанавливает склад из копии, а это
+       переписывает записи целиком. Но и молчать об этом не будем — такое
+       попадёт в журнал, где видно, кто и когда переписал историю. */
+    const хозяин = user.role === 'owner';
+    let переписано = 0;
+
     for (const [id, о] of было) {
       const н = стало.get(id);
       if (!н) {
-        if (!вКорзине.has(id)) throw new HttpError(409, 'debt_vanished', { id });
+        if (!вКорзине.has(id)) {
+          if (!хозяин) throw new HttpError(409, 'debt_vanished', { id });
+          переписано++;
+        }
         continue;
       }
-      if (н.pid !== о.pid || н.type !== о.type || +н.amt !== +о.amt || +н.t !== +о.t)
-        throw new HttpError(409, 'debt_changed', { id });
+      if (н.pid !== о.pid || н.type !== о.type || +н.amt !== +о.amt || +н.t !== +о.t) {
+        if (!хозяин) throw new HttpError(409, 'debt_changed', { id });
+        переписано++;
+        continue;
+      }
       н.by = о.by; н.at = о.at;                 // автора и время записи не переписать
     }
+    if (переписано) auth.audit(user.id, 'debts_rewrite', 'записей: ' + переписано);
     for (const [id, н] of стало) {
       if (было.has(id)) continue;
       н.by = user.name;                          // автора новой записи ставит сервер
@@ -187,7 +241,11 @@ function makeDocs(ctx) {
     let next = data;
     if (mode === 'update') { if (!row) throw new HttpError(404, 'not_found'); next = Object.assign(JSON.parse(row.data), data); }
     if (isDebtsDoc(col, id)) next = guardDebts(next, row ? JSON.parse(row.data) : null, u);
-    if (isMainDoc(col, id) && u.role !== 'owner') next = keepCost(next, row ? JSON.parse(row.data) : null);
+    if (isMainDoc(col, id)) {
+      const пред = row ? JSON.parse(row.data) : null;
+      next = guardStock(next, пред, u);
+      if (u.role !== 'owner') next = keepCost(next, пред);
+    }
     const json = JSON.stringify(next);
     if (Buffer.byteLength(json) > cfg.maxDocBytes) throw new HttpError(413, 'too_large');
     const version = row ? row.version + 1 : 1;

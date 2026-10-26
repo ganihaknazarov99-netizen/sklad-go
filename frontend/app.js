@@ -39,6 +39,24 @@ function doPush(n,pre){
     if(!anyDirty())setSy('ok');
   },function(e){
     pending=false;
+    /* Сервер не принял переписанную историю. Слияние тут не поможет —
+       оно сохранит нашу же правку и упрётся снова. Берём историю с сервера
+       как есть и объясняем человеку, что произошло. */
+    if(e&&e.code==='log_vanished'){
+      dbd.get().then(function(sn){
+        if(sn.exists){
+          var R=cleanMain(sn.data());
+          mergeMainIn(sn.data(),sn.version);
+          S.log=clone(R.log||[]);            // спорные записи — только серверные
+          try{localStorage.setItem(KEY,JSON.stringify(S))}catch(x){}   // без save(): он бы снова всё отправил
+          baseMain=clone(cleanMain(mainPayload()));LSS('skladgo.base.main',JSON.stringify(baseMain));
+        }
+        dirtyMain=false;LSS('skladgo.dirty.main','0');setSy('ok');
+        toast('⚠️ '+(e.message||T('История взята с сервера как есть')));
+        render();
+      },function(){setSy('off');scheduleRetry()});
+      return;
+    }
     if(e&&e.code==='version_conflict'&&n<4){
       dbd.get().then(function(sn){if(sn.exists)mergeMainIn(sn.data(),sn.version);doPush(n+1)},function(){setSy('off');scheduleRetry()});
     }else{setSy(isNet(e)?'off':'err');scheduleRetry()}
