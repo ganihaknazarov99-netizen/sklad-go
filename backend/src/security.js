@@ -27,6 +27,14 @@ function newCode() {
   let o = ''; for (let i = 0; i < 6; i++) o += A[b[i] % A.length];
   return o;
 }
+/* Отпечаток устройства по строке браузера. Номера версий выбрасываем:
+   иначе очередное обновление Chrome выглядело бы как чужое устройство
+   и выкидывало человека из программы каждую неделю. */
+function deviceKey(ua) {
+  const s = String(ua || '').replace(/[0-9._]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  return s ? sha(s).slice(0, 32) : '';
+}
+
 function safeEqual(a, b) {
   const x = Buffer.from(String(a)), y = Buffer.from(String(b));
   return x.length === y.length && crypto.timingSafeEqual(x, y);
@@ -43,4 +51,4 @@ class Limiter {
   }
   reset(key) { this.m.delete(key); }
 }
-module.exports = { hashPassword, verifyPassword, DUMMY_HASH, sha, newId, newToken, newCode, safeEqual, Limiter };
+module.exports = { hashPassword, verifyPassword, DUMMY_HASH, sha, newId, newToken, newCode, safeEqual, deviceKey, Limiter };

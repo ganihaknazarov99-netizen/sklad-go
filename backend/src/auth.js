@@ -11,11 +11,18 @@ const normEmail = (e) => String(e || '').trim().toLowerCase();
 function makeAuth(ctx) {
   const { db, cfg, mailer } = ctx;
   const broadcast = (c, p) => ctx.broadcast && ctx.broadcast(c, p);
-  const loginByEmail = new S.Limiter(5, 15 * 60 * 1000);
+  const loginByEmail = new S.Limiter(12, 15 * 60 * 1000);   // замок срабатывает раньше, на пятом промахе
   const loginByIp = new S.Limiter(30, 15 * 60 * 1000);
   const regByIp = new S.Limiter(10, 60 * 60 * 1000);
   const codeByIp = new S.Limiter(30, 15 * 60 * 1000);
   const totpByIp = new S.Limiter(20, 15 * 60 * 1000);
+
+  /* Замок на учётную запись. Ограничитель частоты только тормозит перебор,
+     а замок его прекращает. Пятнадцать минут, а не час: иначе недоброжелателю
+     хватило бы пяти промахов, чтобы держать хозяина снаружи весь день.
+     Открыть досрочно можно с сервера: node scripts/admin.js unlock почта. */
+  const ЗАМОК_ПОСЛЕ = 5;
+  const ЗАМОК_НА = 15 * 60 * 1000;
 
   /* Вход со вторым фактором идёт в два шага. Между ними пароль уже проверен,
      но сессии ещё нет — вместо неё короткий пропуск, живёт 5 минут и только в памяти.
@@ -94,10 +101,27 @@ function makeAuth(ctx) {
 
   function createSession(user, req) {
     const token = S.newToken(), now = Date.now(), exp = now + cfg.sessionDays * 864e5;
-    db.prepare('INSERT INTO sessions(token_hash,user_id,created_at,expires_at,ua) VALUES(?,?,?,?,?)')
-      .run(S.sha(token), user.id, now, exp, String(req.headers['user-agent'] || '').slice(0, 200));
+    const ua = String(req.headers['user-agent'] || '').slice(0, 200);
+    const dev = S.deviceKey(ua);
+    db.prepare('INSERT INTO sessions(token_hash,user_id,created_at,expires_at,ua,dev) VALUES(?,?,?,?,?,?)')
+      .run(S.sha(token), user.id, now, exp, ua, dev);
     db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);
-    return { token, expiresAt: exp };
+
+    /* Новое устройство владелец должен увидеть: если входили не вы, это
+       единственный способ заметить. Самый первый вход новостью не считаем. */
+    let newDevice = false;
+    if (dev) {
+      const знакомое = db.prepare('SELECT dev FROM devices WHERE user_id=? AND dev=?').get(user.id, dev);
+      if (знакомое) {
+        db.prepare('UPDATE devices SET last_seen=?,ua=? WHERE user_id=? AND dev=?').run(now, ua, user.id, dev);
+      } else {
+        const было = db.prepare('SELECT COUNT(*) AS c FROM devices WHERE user_id=?').get(user.id).c;
+        db.prepare('INSERT INTO devices(user_id,dev,ua,first_seen,last_seen,ack) VALUES(?,?,?,?,?,?)')
+          .run(user.id, dev, ua, now, now, было ? 0 : 1);
+        if (было) { newDevice = true; audit(user.id, 'login_new_device', ua); }
+      }
+    }
+    return { token, expiresAt: exp, newDevice };
   }
   // Возвращает пользователя по заголовку Authorization: Bearer ... (или null)
   function authenticate(req) {
@@ -105,6 +129,19 @@ function makeAuth(ctx) {
     if (!m) return null;
     const s = db.prepare('SELECT * FROM sessions WHERE token_hash=?').get(S.sha(m[1]));
     if (!s || s.expires_at < Date.now()) return null;
+    /* Доступ привязан к устройству. Украли его целиком и унесли на другой
+       телефон — там он мёртв, и мы это запишем. Пустая строка браузера тоже
+       не совпадёт: иначе защиту обходили бы, просто её не присылая. */
+    const dev = S.deviceKey(req.headers['user-agent']);
+    if (s.dev) {
+      if (s.dev !== dev) {
+        db.prepare('DELETE FROM sessions WHERE token_hash=?').run(s.token_hash);
+        audit(s.user_id, 'session_wrong_device', dev || 'без браузера');
+        return null;
+      }
+    } else if (dev) {
+      db.prepare('UPDATE sessions SET dev=? WHERE token_hash=?').run(dev, s.token_hash);  // вход, открытый до этой правки
+    }
     const u = byId(s.user_id);
     if (!u) return null;
     u._token_hash = s.token_hash;
@@ -181,10 +218,30 @@ function makeAuth(ctx) {
     },
     async login(req, body, ip) {
       const email = normEmail(body.email);
-      if (!loginByIp.hit(ip) || !loginByEmail.hit(email)) throw new HttpError(429, 'rate_limited');
       const user = byEmail(email);
+      const сейчас = Date.now();
+      // Замок — первым: человеку надо сказать «заперто на столько-то»,
+      // а не глухое «слишком много попыток».
+      if (user && user.lock_until > сейчас) {
+        audit(user.id, 'login_locked', ip);
+        throw new HttpError(423, 'account_locked', { minutes: Math.ceil((user.lock_until - сейчас) / 60000) });
+      }
+      if (!loginByIp.hit(ip) || !loginByEmail.hit(email)) throw new HttpError(429, 'rate_limited');
       const ok = S.verifyPassword(String(body.password || ''), user ? user.pass_hash : S.DUMMY_HASH) && !!user;
-      if (!ok) { audit(user && user.id, 'login_fail', ip); throw new HttpError(401, 'bad_credentials'); }
+      if (!ok) {
+        if (user) {
+          const промахов = (user.fails || 0) + 1;
+          if (промахов >= ЗАМОК_ПОСЛЕ) {
+            db.prepare('UPDATE users SET fails=0,lock_until=? WHERE id=?').run(сейчас + ЗАМОК_НА, user.id);
+            audit(user.id, 'account_locked', ip);
+          } else {
+            db.prepare('UPDATE users SET fails=? WHERE id=?').run(промахов, user.id);
+          }
+        }
+        audit(user && user.id, 'login_fail', ip);
+        throw new HttpError(401, 'bad_credentials');
+      }
+      if (user.fails || user.lock_until) db.prepare('UPDATE users SET fails=0,lock_until=0 WHERE id=?').run(user.id);
       if (cfg.requireVerify && !user.verified) throw new HttpError(403, 'not_verified');
       loginByEmail.reset(email);
       // Пароль верен, но этого мало: просим код из аутентификатора
@@ -194,7 +251,7 @@ function makeAuth(ctx) {
       }
       audit(user.id, 'login', ip);
       const s = createSession(user, req);
-      return { token: s.token, expiresAt: s.expiresAt, user: publicUser(user) };
+      return { token: s.token, expiresAt: s.expiresAt, user: publicUser(user), newDevice: s.newDevice };
     },
     /* Второй шаг входа: шестизначный код из приложения или один запасной код. */
     async login2fa(req, body, ip) {
@@ -220,7 +277,7 @@ function makeAuth(ctx) {
       half.delete(String(body.pending));
       audit(user.id, 'login', ip);
       const se = createSession(user, req);
-      const out = { token: se.token, expiresAt: se.expiresAt, user: publicUser(user) };
+      const out = { token: se.token, expiresAt: se.expiresAt, user: publicUser(user), newDevice: se.newDevice };
       if (backupLeft !== null) out.backupLeft = backupLeft;
       return out;
     },
@@ -300,7 +357,37 @@ function makeAuth(ctx) {
       audit(u.id, 'totp_backup_new', '');
       return { backup: issueBackup(u.id) };
     },
-    async me(req) { return { user: publicUser(requireUser(req)) }; },
+    /* Журнал входов — владельцу своего магазина.
+       Сервер и раньше записывал каждый вход и каждую неудачную попытку, но
+       видеть их было негде. А замечают, что пароль подбирают, именно по ним. */
+    async securityLog(req) {
+      const u = requireUser(req);
+      if (u.role !== 'owner') throw new HttpError(403, 'forbidden');
+      const rows = db.prepare(`
+        SELECT a.t, a.action, a.detail, us.name, us.email
+        FROM audit a JOIN users us ON us.id = a.user_id
+        WHERE us.shop_id = ? AND a.action <> 'login_half'
+        ORDER BY a.t DESC LIMIT 60`).all(u.shop_id);
+      return { events: rows };
+    },
+    async me(req) {
+      const u = requireUser(req);
+      const out = { user: publicUser(u) };
+      /* Если кто-то вошёл не с вашего телефона, вы узнаете об этом здесь —
+         при первом же открытии программы. Писем у нас нет, а знать надо. */
+      const своё = S.deviceKey(req.headers['user-agent']);
+      const чужие = db.prepare(
+        'SELECT ua, first_seen FROM devices WHERE user_id=? AND ack=0 AND dev<>? AND first_seen>? ORDER BY first_seen DESC LIMIT 5'
+      ).all(u.id, своё, Date.now() - 14 * 864e5);
+      if (чужие.length) out.newDevices = чужие.map((d) => ({ ua: d.ua, t: d.first_seen }));
+      return out;
+    },
+    // «Это был я» — больше не напоминать
+    async ackDevices(req) {
+      const u = requireUser(req);
+      db.prepare('UPDATE devices SET ack=1 WHERE user_id=?').run(u.id);
+      return { ok: true };
+    },
     async updateMe(req, body) {
       const u = requireUser(req), name = String(body.name == null ? u.name : body.name).trim().slice(0, 80);
       const phone = String(body.phone == null ? u.phone : body.phone).trim();

@@ -1,8 +1,10 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
 <title>Sklad Go</title>
+<script src="theme.js"></script>
 <style>
 :root{--bg:#f2f5f7;--card:#fff;--tx:#10161d;--mu:#6b7683;--ac:#0d9488;--in:#16a34a;--out:#ea580c;--bd:#e1e6eb;--warn:#d97706;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0f13;--card:#151b21;--tx:#eef2f5;--mu:#93a0ad;--ac:#2dd4bf;--in:#4ade80;--out:#fb923c;--bd:#252e38;--warn:#fbbf24}}
+:root[data-theme="light"]{color-scheme:light}:root[data-theme="dark"]{color-scheme:dark}
 :root[data-theme="dark"]{--bg:#0b0f13;--card:#151b21;--tx:#eef2f5;--mu:#93a0ad;--ac:#2dd4bf;--in:#4ade80;--out:#fb923c;--bd:#252e38;--warn:#fbbf24}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:90px}
@@ -22,7 +24,7 @@ button{cursor:pointer}
 .info{flex:1;min-width:0}.info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 small{color:var(--mu);display:block}
 .ctl{display:flex;align-items:center;gap:4px}
-.ctl button{width:44px;height:44px;border-radius:12px;border:0;font-size:24px;font-weight:700;color:#fff}
+.ctl button{width:47px;height:50px;border-radius:12px;border:0;padding:0;font-size:21px;font-weight:700;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:1px}.ctl button i{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.1px;opacity:1}
 .ctl .m{background:var(--out)}.ctl .p{background:var(--in)}.ctl .m:disabled{opacity:.3}
 .q{min-width:38px;text-align:center;font-size:22px;font-weight:800}.q.low{color:var(--warn)}
 .fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:32px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
@@ -116,7 +118,11 @@ input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:n
 <button class="fab" id="fab" style="display:none">＋</button>
 <nav id="nav"></nav>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<!-- Чужой скрипт с внешней раздачи. integrity — отпечаток файла: если раздачу
+     подменят, браузер его просто не выполнит, а не пустит чужой код на страницу. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
+        integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o"
+        crossorigin="anonymous"></script>
 <script src="merge.js"></script>
 <script src="config.js"></script>
 <!-- backend.js сам решает: сервер (config.js заполнен) или демо, и после входа грузит app.js -->

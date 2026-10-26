@@ -131,7 +131,7 @@ function apply(it,type,n,note){
   var t=Date.now();it.lb=ME?ME.name:'';it.ld=t;
   S.log.unshift({by:ME?ME.name:'',t:t,type:type,id:it.id,name:lab(it),qty:n,sum:pf(it)*n,note:note||''});
   S.log=S.log.slice(0,400);save();buzz();last={id:it.id,type:type,n:n,t:t};
-  toast((type==='in'?'＋ Приход ':'− Расход ')+n+' · '+lab(it)+' → '+it.qty+(it.ar?' · 🗄 ушёл в архив':''),true);
+  toast((type==='in'?'＋ Привёз ':'− Продал ')+n+' · '+lab(it)+' → '+it.qty+(it.ar?' · 🗄 ушёл в архив':''),true);
   return true;
 }
 function doUndo(){
@@ -177,7 +177,7 @@ function readUnit(px){var c=document.querySelector('#'+px+'uw .chip.on'),u=c?c.d
 var fo={};
 function cmpSz(a,b){function k(x){var i=SC.indexOf(x);return i>-1?[0,i,'']:/^\d+$/.test(x)?[1,+x,'']:[2,0,x]}var p=k(a.size||''),r=k(b.size||'');return p[0]-r[0]||p[1]-r[1]||(p[2]<r[2]?-1:p[2]>r[2]?1:0)}
 function cardHtml(i,sub){
-  return '<div class="card'+(sub?' sm':'')+'"><div class="info" data-o="'+i.id+'"><b>'+(sub?esc(i.size||'без размера'):esc(i.name))+'</b>'+(sub?'':'<small>'+((i.size||i.color)?[i.size,i.color].filter(Boolean).map(esc).join(' · '):esc(i.cat))+(i.price?' · '+pTxt(i):'')+'</small>')+'</div><div class="ctl"><button class="m" data-m="'+i.id+'"'+(i.qty<1?' disabled':'')+'>−</button><span class="q'+(i.qty<=3?' low':'')+'" data-qs="'+i.id+'">'+i.qty+'</span><button class="p" data-p="'+i.id+'">＋</button></div></div>';
+  return '<div class="card'+(sub?' sm':'')+'"><div class="info" data-o="'+i.id+'"><b>'+(sub?esc(i.size||'без размера'):esc(i.name))+'</b>'+(sub?'':'<small>'+((i.size||i.color)?[i.size,i.color].filter(Boolean).map(esc).join(' · '):esc(i.cat))+(i.price?' · '+pTxt(i):'')+'</small>')+'</div><div class="ctl"><button class="m" data-m="'+i.id+'"'+(i.qty<1?' disabled':'')+'>−<i>продал</i></button><span class="q'+(i.qty<=3?' low':'')+'" data-qs="'+i.id+'">'+i.qty+'</span><button class="p" data-p="'+i.id+'">＋<i>привёз</i></button></div></div>';
 }
 function valueSheet(){
   var by={},tv=0,tp=0,np=[],cents=0;
@@ -236,7 +236,7 @@ function stock(){
   var td=dkey(Date.now()),val=0,tot=0,inn=0,out=0,rev=0;
   S.items.forEach(function(i){val+=vOf(i);tot+=i.qty});
   S.log.forEach(function(l){if(dkey(l.t)===td){if(l.type==='in')inn+=l.qty;else if(l.type==='out'){out+=l.qty;rev+=l.sum||0}}});
-  var h='<h1>'+LOGO+'<small id="syi" style="display:inline;font-size:12px" title="Общий склад">'+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+'</b><small>стоимость склада · '+unitsTxt(S.items)+' · подробнее ›</small></div><div class="stat"><b>'+money(rev)+'</b><small>продано сегодня</small></div><div class="stat"><b class="i">＋'+inn+'</b><small>приход сегодня</small></div><div class="stat"><b class="o">−'+out+'</b><small>расход сегодня</small></div></div>';
+  var h='<h1>'+LOGO+'<small id="syi" style="display:inline;font-size:12px" title="Общий склад">'+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+'</b><small>стоимость склада · '+unitsTxt(S.items)+' · подробнее ›</small></div><div class="stat"><b>'+money(rev)+'</b><small>выручка сегодня</small></div><div class="stat"><b class="i">＋'+inn+'</b><small>привезли, шт</small></div><div class="stat"><b class="o">−'+out+'</b><small>продали, шт</small></div></div>';
   h+='<input id="q" type="search" placeholder="Поиск: название, размер, цвет…" value="'+esc(q)+'">';
   h+='<div class="chips">'+['Все','⚠️ Мало','🗄 Архив'].concat(S.cats).map(function(c){return '<div class="chip'+(c===cat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</div>'}).join('')+'</div>';
   var L=S.items.filter(function(i){var arc=cat==='🗄 Архив';return(arc?!!i.ar:!i.ar)&&(cat==='Все'||arc||(cat==='⚠️ Мало'?i.qty<=3:i.cat===cat))&&lab(i).toLowerCase().indexOf(q.toLowerCase())>-1});
@@ -278,7 +278,7 @@ function open(html){
 }
 function sheet(id){
   var it=find(id);if(!it)return;
-  open('<h2>'+esc(it.name)+'</h2><small>'+meta(it)+(it.price?' · '+pTxt(it):'')+' · на складе: <b>'+qt(it.qty,uOf(it))+'</b>'+(estTxt([it])?' ('+estTxt([it])+')':'')+'</small><small>'+itwho(it)+'</small><div class="step"><button id="dm">−</button><input id="n" type="number" inputmode="numeric" value="1" min="1"><button id="dp">＋</button></div><div class="nums">'+[1,5,10,20].map(function(x){return '<button data-n="'+x+'">'+x+'</button>'}).join('')+'</div><input id="nt" placeholder="Заметка: поставщик / покупатель (необязательно)"><div class="two"><button class="go out" id="so">− Расход</button><button class="go in" id="si">＋ Приход</button></div><button class="go" id="sd" style="background:#7c3aed;margin-top:8px;width:100%">💳 Продать в долг клиенту</button><div class="tools"><button id="fx">⚖ Пересчёт</button><button id="ed">✏️ Изменить</button><button id="cp">⧉ Другой размер</button><button class="del" id="dl">🗑 Удалить</button></div>');
+  open('<h2>'+esc(it.name)+'</h2><small>'+meta(it)+(it.price?' · '+pTxt(it):'')+' · на складе: <b>'+qt(it.qty,uOf(it))+'</b>'+(estTxt([it])?' ('+estTxt([it])+')':'')+'</small><small>'+itwho(it)+'</small><div class="step"><button id="dm">−</button><input id="n" type="number" inputmode="numeric" value="1" min="1"><button id="dp">＋</button></div><div class="nums">'+[1,5,10,20].map(function(x){return '<button data-n="'+x+'">'+x+'</button>'}).join('')+'</div><input id="nt" placeholder="Заметка: поставщик / покупатель (необязательно)"><div class="two"><button class="go out" id="so">− Продал</button><button class="go in" id="si">＋ Привёз</button></div><button class="go" id="sd" style="background:#7c3aed;margin-top:8px;width:100%">💳 Продать в долг клиенту</button><div class="tools"><button id="fx">⚖ Пересчёт</button><button id="ed">✏️ Изменить</button><button id="cp">⧉ Другой размер</button><button class="del" id="dl">🗑 Удалить</button></div>');
   function n(){return Math.max(1,parseInt($('n').value,10)||1)}
   $('dm').onclick=function(){$('n').value=Math.max(1,n()-1)};$('dp').onclick=function(){$('n').value=n()+1};
   [].forEach.call(document.querySelectorAll('[data-n]'),function(b){b.onclick=function(){$('n').value=b.dataset.n}});
@@ -383,7 +383,7 @@ function form(it,pre){
     K.forEach(function(k){
       var n=single?qa:(parseInt(qm[k[0]+'|'+k[1]],10)||0);
       var ex=S.items.filter(function(i){return i.name.toLowerCase()===nm.toLowerCase()&&i.cat===c&&(i.color||'')===k[0]&&(i.size||'')===k[1]})[0];
-      if(ex){if(n>0)apply(ex,'in',n,'Приход (в папку)');return}
+      if(ex){if(n>0)apply(ex,'in',n,'Привёз (в папку)');return}
       var x={id:uid(),name:nm,cat:c,size:k[1],color:k[0],price:pr,qty:0,ar:false,u:RU.u,pk:RU.pk,pb:RU.pb,ab:ME?ME.name:'',ad:Date.now()};S.items.push(x);if(n>0)apply(x,'in',n,'Начальный остаток');
     });
     fo[(nm+'|'+c).toLowerCase()]=true;save();close();toast('Добавлено позиций: '+K.length);logAct('добавил товар «'+nm+'» ('+K.length+' поз.)');render();
@@ -535,7 +535,7 @@ function hist(){
   [].forEach.call(document.querySelectorAll('[data-rt]'),function(b){b.onclick=function(){restItem(b.dataset.rt)}});
   [].forEach.call(document.querySelectorAll('#pc .chip'),function(c){c.onclick=function(){hp=+c.dataset.d;hist()}});
   $('e1').onclick=function(){dl('sklad-ostatki.csv',[['Название','Категория','Размер','Цвет','Цена','Остаток','Сумма']].concat(S.items.map(function(i){return [i.name,i.cat,i.size,i.color,i.price||0,i.qty,vOf(i)]})))};
-  $('e2').onclick=function(){dl('sklad-istoriya.csv',[['Дата','Время','Операция','Товар','Кол-во','Сумма','Заметка','Сотрудник']].concat(S.log.map(function(l){var d=new Date(l.t);return [d.toLocaleDateString('ru-RU'),d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),l.type==='in'?'Приход':l.type==='out'?'Расход':'Пересчёт',l.name,l.qty,l.sum||0,l.note||'',l.by||'']})))};
+  $('e2').onclick=function(){dl('sklad-istoriya.csv',[['Дата','Время','Операция','Товар','Кол-во','Сумма','Заметка','Сотрудник']].concat(S.log.map(function(l){var d=new Date(l.t);return [d.toLocaleDateString('ru-RU'),d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),l.type==='in'?'Привёз':l.type==='out'?'Продал':'Пересчёт',l.name,l.qty,l.sum||0,l.note||'',l.by||'']})))};
   $('e3').onclick=function(){dl('sklad-backup-'+new Date().toISOString().slice(0,10)+'.json',null,JSON.stringify({v:2,items:S.items,log:S.log,cats:S.cats,biz:S.biz||'',debts:{people:D.people,ops:D.ops}}))};
   $('e4').onclick=restoreUI;
   if($('rp'))$('rp').onclick=function(){
@@ -898,7 +898,7 @@ function getSample(){if(smp)return smp;smp=(window.claude?claude.use('sample'):P
 function fmtB(t){return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
 function propHtml(p){
   if(p.k==='msg')return '<div class="prop"><b>'+(p.ch==='wa'?'💬 WhatsApp Business':'✉️ SMS')+' → '+esc(p.name)+'</b><small>'+esc(p.phone)+'</small><div style="margin:6px 0;font-size:14px">«'+esc(p.text)+'»</div>'+(p.done?'<span class="'+(p.done==='ok'?'i':'o')+'">'+(p.done==='ok'?'✅ Открыто — нажмите «Отправить» в приложении':'✖ Отменено')+'</span>':'<div class="row"><button class="go ac" data-ok="'+p.id+'" style="padding:10px;font-size:15px">✓ Открыть '+(p.ch==='wa'?'WhatsApp Business':'SMS')+'</button><button class="go" data-no="'+p.id+'" style="padding:10px;font-size:15px;background:var(--card);color:var(--tx);border:1px solid var(--bd)">Отмена</button></div>')+'</div>';
-  var it=p.k==='stock'?find(p.item):null,txt=p.k==='stock'?(p.ty==='in'?'＋ Приход':'− Расход')+' · '+(it?lab(it):'товар')+' × '+p.n:(p.ty==='give'?'⬆ Я дал в долг':'⬇ Я получил')+' · '+p.name+' · '+money(p.am);
+  var it=p.k==='stock'?find(p.item):null,txt=p.k==='stock'?(p.ty==='in'?'＋ Привёз':'− Продал')+' · '+(it?lab(it):'товар')+' × '+p.n:(p.ty==='give'?'⬆ Я дал в долг':'⬇ Я получил')+' · '+p.name+' · '+money(p.am);
   return '<div class="prop"><b>🧾 Предложение</b><br>'+esc(txt)+(p.done?'<br><span class="'+(p.done==='ok'?'i':'o')+'">'+(p.done==='ok'?'✅ Выполнено':'✖ Отменено')+'</span>':'<div class="row" style="margin-top:8px"><button class="go ac" data-ok="'+p.id+'" style="padding:10px;font-size:15px">✓ Выполнить</button><button class="go" data-no="'+p.id+'" style="padding:10px;font-size:15px;background:var(--card);color:var(--tx);border:1px solid var(--bd)">Отмена</button></div>')+'</div>';
 }
 function msgHtml(m,last){
@@ -982,6 +982,7 @@ function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h='<h1>Команда</h1><div class="card"><div class="info"><b>'+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?'Владелец · ':'Сотрудник · ')+esc(ME.phone)+' · '+esc(ME.mail)+'</small></div><button class="link" id="me">Изменить</button></div>';
   if(window.skladAuth)h+='<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>'+(isOwn?'':'<button class="link del" id="da">🗑 Удалить мой аккаунт</button>')+'</div>';
+  h+='<div class="lbl">🎨 Вид</div>'+chipsHtml('th',[['light','Светлый'],['dark','Тёмный'],['auto','Как на телефоне']],window.SkladTheme?window.SkladTheme.get():'light')+'<div style="height:12px"></div>';
   if(isOwn)h+='<div class="lbl">🏪 Название магазина (подпись в сообщениях)</div><div class="row"><input id="bz" placeholder="Напр. Магазин Ганӣ" value="'+esc(S.biz||'')+'"><button class="go ac" id="bzs" style="padding:10px;font-size:15px;margin-bottom:8px">Сохранить</button></div>';
   var pd=staff.filter(function(x){return x.status==='pending'}),ac=staff.filter(function(x){return x.status!=='pending'});
   if(isOwn&&pd.length)h+='<div class="lbl">Ждут подтверждения ('+pd.length+')</div>'+pd.map(function(x){return '<div class="card"><div class="info"><b>'+esc(x.name)+'</b><small>'+esc(x.phone)+' · '+esc(x.mail)+'</small></div><button class="link" data-ap="'+x._id+'">✓ Разрешить</button><button class="link del" data-bl="'+x._id+'">✕</button></div>'}).join('');
@@ -992,6 +993,7 @@ function team(){
   if(!actList.length)h+='<div class="empty">Изменений пока нет</div>';
   h+=actList.slice(0,40).map(function(a){var d=new Date(a.t);return '<div class="log"><div><b>'+esc(a.by||'—')+'</b><small>'+esc(a.txt)+'</small></div><span style="color:var(--mu);font-size:12px;text-align:right">'+d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+'<br>'+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span></div>'}).join('');
   $('app').innerHTML=h;$('me').onclick=function(){gate(true)};
+  if(window.SkladTheme)bindChips('th',function(v){window.SkladTheme.set(v);render()});
   if($('lo'))$('lo').onclick=function(){if(anyDirty()&&this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Не всё отправлено! Нажмите ещё раз — выйти и потерять';return}window.skladAuth.signOut()};
   if($('da'))$('da').onclick=function(){
     open('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Вы выйдете из программы, и для возврата владельцу придётся заново подтвердить доступ. Данные склада и долгов останутся. Впишите слово <b>удалить</b> для подтверждения.</small><input id="dpw" placeholder="удалить" autocapitalize="none"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>');

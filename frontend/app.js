@@ -122,7 +122,11 @@ function meta(i){return [i.cat,i.size,i.color].filter(Boolean).map(esc).join(' �
 function lab(i){return i.name+(i.size?' · '+i.size:'')+(i.color?' · '+i.color:'')}
 var CURS={TJS:['сомони','сомонӣ'],UZS:['сум','сўм'],KZT:['тенге','тенге'],KGS:['сом','сом'],RUB:['руб.','рубл'],USD:['$','доллар']};
 function CL(){var c=CURS[S.cur]||CURS.TJS;return c[window.SKLAD_LANG==='tg'?1:0]}
-function money(n){var r=Math.round((+n||0)*100)/100;return r.toLocaleString('ru-RU',{maximumFractionDigits:2})+' '+CL()}
+function money(n){
+  var r=Math.round((+n||0)*100)/100;
+  if(r===0)r=0;   // иначе выходит «−0 сомони»: минус там, где всё сошлось
+  return r.toLocaleString('ru-RU',{maximumFractionDigits:2})+' '+CL();
+}
 function dkey(t){return new Date(t).toLocaleDateString('ru-RU')}
 function buzz(){try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}}
 
@@ -138,7 +142,7 @@ function apply(it,type,n,note){
   var t=Date.now();it.lb=ME?ME.name:'';it.ld=t;
   S.log.unshift({by:ME?ME.name:'',t:t,type:type,id:it.id,name:lab(it),qty:n,sum:pf(it)*n,note:note||''});
   S.log=S.log.slice(0,400);save();buzz();last={id:it.id,type:type,n:n,t:t};
-  toast((type==='in'?T('＋ Приход '):T('− Расход '))+n+' · '+lab(it)+' → '+it.qty+(it.ar?T(' · 🗄 ушёл в архив'):''),true);
+  toast((type==='in'?T('＋ Привёз '):T('− Продал '))+n+' · '+lab(it)+' → '+it.qty+(it.ar?T(' · 🗄 ушёл в архив'):''),true);
   return true;
 }
 function doUndo(){
@@ -184,7 +188,7 @@ function readUnit(px){var c=document.querySelector('#'+px+'uw .chip.on'),u=c?c.d
 var fo={};
 function cmpSz(a,b){function k(x){var i=SC.indexOf(x);return i>-1?[0,i,'']:/^\d+$/.test(x)?[1,+x,'']:[2,0,x]}var p=k(a.size||''),r=k(b.size||'');return p[0]-r[0]||p[1]-r[1]||(p[2]<r[2]?-1:p[2]>r[2]?1:0)}
 function cardHtml(i,sub){
-  return '<div class="card'+(sub?' sm':'')+'"><div class="info" data-o="'+i.id+'"><b>'+(sub?esc(i.size||T('без размера')):esc(i.name))+'</b>'+(sub?'':'<small>'+((i.size||i.color)?[i.size,i.color].filter(Boolean).map(esc).join(' · '):esc(i.cat))+(i.price?' · '+pTxt(i):'')+'</small>')+'</div><div class="ctl"><button class="m" data-m="'+i.id+'"'+(i.qty<1?' disabled':'')+'>−</button><span class="q'+(i.qty<=3?' low':'')+'" data-qs="'+i.id+'">'+i.qty+'</span><button class="p" data-p="'+i.id+'">＋</button></div></div>';
+  return '<div class="card'+(sub?' sm':'')+'"><div class="info" data-o="'+i.id+'"><b>'+(sub?esc(i.size||T('без размера')):esc(i.name))+'</b>'+(sub?'':'<small>'+((i.size||i.color)?[i.size,i.color].filter(Boolean).map(esc).join(' · '):esc(i.cat))+(i.price?' · '+pTxt(i):'')+'</small>')+'</div><div class="ctl"><button class="m" data-m="'+i.id+'"'+(i.qty<1?' disabled':'')+'>−<i>'+T('продал')+'</i></button><span class="q'+(i.qty<=3?' low':'')+'" data-qs="'+i.id+'">'+i.qty+'</span><button class="p" data-p="'+i.id+'">＋<i>'+T('привёз')+'</i></button></div></div>';
 }
 function valueSheet(){
   var by={},tv=0,tp=0,np=[],cents=0;
@@ -269,7 +273,7 @@ function bcPick(code){
 }
 function scanUI(mode,cb,cur){
   var attach=typeof cb==='function';mode=attach?'attach':(mode||scMode||'find');
-  var modes=[['find','Найти'],['in','＋ Приход'],['out','− Расход']];
+  var modes=[['find','Найти'],['in','＋ Привёз'],['out','− Продал']];
   open('<h2>'+T('Сканер штрихкода')+'</h2>'
     +((attach||mode==='inv')?'':'<div class="chips" id="scm" style="margin:6px 0">'+modes.map(function(m){return '<div class="chip'+(m[0]===mode?' on':'')+'" data-sm="'+m[0]+'">'+T(m[1])+'</div>'}).join('')+'</div>')
     +'<div class="scbox" id="scbox"><div class="scmsg">'+T('Включаю камеру…')+'</div></div>'
@@ -484,7 +488,7 @@ function stock(){
   var td=dkey(Date.now()),val=0,tot=0,inn=0,out=0,rev=0;
   S.items.forEach(function(i){val+=vOf(i);tot+=i.qty});
   S.log.forEach(function(l){if(l.inv)return;if(dkey(l.t)===td){if(l.type==='in')inn+=l.qty;else if(l.type==='out'){out+=l.qty;rev+=l.sum||0}}});
-  var h='<h1>'+LOGO+T('<small id="syi" style="display:inline;font-size:12px" title="Общий склад">')+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+T('</b><small>стоимость склада · ')+unitsTxt(S.items)+T(' · подробнее ›</small></div><div class="stat"><b>')+money(rev)+T('</b><small>продано сегодня</small></div><div class="stat"><b class="i">＋')+inn+T('</b><small>приход сегодня</small></div><div class="stat"><b class="o">−')+out+T('</b><small>расход сегодня</small></div></div>');
+  var h=devAlert()+'<h1>'+LOGO+T('<small id="syi" style="display:inline;font-size:12px" title="Общий склад">')+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+T('</b><small>стоимость склада · ')+unitsTxt(S.items)+T(' · подробнее ›</small></div><div class="stat"><b>')+money(rev)+T('</b><small>выручка сегодня</small></div><div class="stat"><b class="i">＋')+inn+T('</b><small>привезли, шт</small></div><div class="stat"><b class="o">−')+out+T('</b><small>продали, шт</small></div></div>');
   h+='<div class="srow">'+T('<input id="q" type="search" placeholder="Поиск: название, размер, цвет…" value="')+esc(q)+'"><button class="scanb" id="scb" type="button" aria-label="'+T('Сканер штрихкода')+'">▥</button></div>';
   h+='<div class="chips">'+['Все','⚠️ Мало','🗄 Архив'].concat(S.cats).map(function(c){return '<div class="chip'+(c===cat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</div>'}).join('')+'</div>';
   h+='<div style="display:flex;justify-content:flex-end;gap:14px;margin:-2px 0 8px"><button class="link" id="tgst">'+T('🏷 Ценники')+'</button><button class="link" id="invst">'+(S.inv?T('📋 Продолжить пересчёт'):T('📋 Пересчёт склада'))+'</button></div>';
@@ -494,6 +498,7 @@ function stock(){
   if(cat==='🗄 Архив'&&L.length)h+=T('<div class="lbl">Нет в наличии. Нажмите ＋ — товар вернётся на склад.</div>');
   h+=listHtml(L);
   $('app').innerHTML=h;
+  devBind();
   $('scb').onclick=function(){scMode='find';scanUI('find')};
   var qi=$('q');qi.onkeydown=function(e){
     if(e.key!=='Enter')return;var v=this.value.trim();if(v.length<4||/\s/.test(v))return;
@@ -534,7 +539,7 @@ function open(html){
 }
 function sheet(id){
   var it=find(id);if(!it)return;
-  open('<h2>'+esc(it.name)+'</h2><small>'+meta(it)+(it.price?' · '+pTxt(it):'')+T(' · на складе: <b>')+qt(it.qty,uOf(it))+'</b>'+(estTxt([it])?' ('+estTxt([it])+')':'')+'</small><small>'+itwho(it)+'</small>'+(it.bc?'<small>▥ '+esc(it.bc)+'</small>':'')+'<div class="step"><button id="dm">−</button><input id="n" type="number" inputmode="numeric" value="1" min="1"><button id="dp">＋</button></div><div class="nums">'+[1,5,10,20].map(function(x){return '<button data-n="'+x+'">'+x+'</button>'}).join('')+T('</div><input id="nt" placeholder="Заметка: поставщик / покупатель (необязательно)"><div class="two"><button class="go out" id="so">− Расход</button><button class="go in" id="si">＋ Приход</button></div><button class="go" id="sd" style="background:#7c3aed;margin-top:8px;width:100%">💳 Продать в долг клиенту</button><div class="tools"><button id="fx">⚖ Пересчёт</button><button id="ed">✏️ Изменить</button><button id="cpy">⧉ Другой размер</button><button id="bcb">▥ Штрихкод</button><button class="del" id="dl">🗑 Удалить</button></div>'));
+  open('<h2>'+esc(it.name)+'</h2><small>'+meta(it)+(it.price?' · '+pTxt(it):'')+T(' · на складе: <b>')+qt(it.qty,uOf(it))+'</b>'+(estTxt([it])?' ('+estTxt([it])+')':'')+'</small><small>'+itwho(it)+'</small>'+(it.bc?'<small>▥ '+esc(it.bc)+'</small>':'')+'<div class="step"><button id="dm">−</button><input id="n" type="number" inputmode="numeric" value="1" min="1"><button id="dp">＋</button></div><div class="nums">'+[1,5,10,20].map(function(x){return '<button data-n="'+x+'">'+x+'</button>'}).join('')+T('</div><input id="nt" placeholder="Заметка: поставщик / покупатель (необязательно)"><div class="two"><button class="go out" id="so">− Продал</button><button class="go in" id="si">＋ Привёз</button></div><button class="go" id="sd" style="background:#7c3aed;margin-top:8px;width:100%">💳 Продать в долг клиенту</button><div class="tools"><button id="fx">⚖ Пересчёт</button><button id="ed">✏️ Изменить</button><button id="cpy">⧉ Другой размер</button><button id="bcb">▥ Штрихкод</button><button class="del" id="dl">🗑 Удалить</button></div>'));
   function n(){return Math.max(1,parseInt($('n').value,10)||1)}
   $('dm').onclick=function(){$('n').value=Math.max(1,n()-1)};$('dp').onclick=function(){$('n').value=n()+1};
   [].forEach.call(document.querySelectorAll('[data-n]'),function(b){b.onclick=function(){$('n').value=b.dataset.n}});
@@ -650,7 +655,7 @@ function form(it,pre){
     K.forEach(function(k){
       var n=single?qa:(parseInt(qm[k[0]+'|'+k[1]],10)||0);
       var ex=S.items.filter(function(i){return i.name.toLowerCase()===nm.toLowerCase()&&i.cat===c&&(i.color||'')===k[0]&&(i.size||'')===k[1]})[0];
-      if(ex){if(single&&bcv&&!ex.bc)ex.bc=bcv;if(n>0)apply(ex,'in',n,T('Приход (в папку)'));return}
+      if(ex){if(single&&bcv&&!ex.bc)ex.bc=bcv;if(n>0)apply(ex,'in',n,T('Привёз (в папку)'));return}
       var x={id:uid(),name:nm,cat:c,size:k[1],color:k[0],price:pr,cp:(cp!==null?cp:0),qty:0,ar:false,u:RU.u,pk:RU.pk,pb:RU.pb,ab:ME?ME.name:'',ad:Date.now()};if(single&&bcv)x.bc=bcv;S.items.push(x);if(n>0)apply(x,'in',n,T('Начальный остаток'));
     });
     fo[(nm+'|'+c).toLowerCase()]=true;save();close();toast(T('Добавлено позиций: ')+K.length);logAct('добавил товар «'+nm+'» ('+K.length+' поз.)');render();
@@ -764,6 +769,12 @@ function wstats(){
   var ci=Object.keys(cats).map(function(k){return {n:k,v:cats[k]}}).sort(function(a,b){return b.v-a.v});
   var tk=Object.keys(top).sort(function(a,b){return top[b].q-top[a].q}).slice(0,8),mx=tk.length?top[tk[0]].q:1;
   var h=T('<h1>История</h1>')+hseg()+chipsHtml('wsm',[['rev','Выручка'],['qty','Штуки']],wsMet)+chipsHtml('wsp',[[7,T('7 дн.')],[30,T('30 дн.')],[90,T('90 дн.')],[365,'Год']],wsPer);
+  /* История хранится не вся: последние 400 записей. У бойкого магазина это
+     меньше месяца, и тогда «90 дней» или «год» показали бы пустоту, будто
+     торговля встала. Молчать об этом нельзя — цифры принимают за правду. */
+  var oldest=S.log.length?S.log[S.log.length-1].t:0;
+  if(S.log.length>=400&&oldest>start)
+    h+='<div class="panel" style="border-color:var(--wn,#b45309)"><small>⚠️ '+T('Программа хранит последние 400 записей — здесь показано с ')+esc(dkey(oldest))+T('. Если торговля шла и раньше, те продажи в эти цифры не вошли.')+'</small></div>';
   h+='<div class="panel"><small>'+(wsMet==='rev'?T('Продажи в день (в среднем)'):T('Продано штук в день (в среднем)'))+'</small><div style="font-size:26px;font-weight:800;color:'+col+';margin-bottom:6px">'+(wsMet==='rev'?money(avg):(Math.round(avg*10)/10)+T(' шт'))+'</div>'+lineSvg(pts,col)+(wsPer>120?T('<small>по неделям</small>'):'')+'</div>';
   h+='<div class="stats"><div class="stat s3"><b class="i">'+money(sum)+T('</b><small>продано · ')+mapTxt(sm)+'</small></div><div class="stat s3"><b>'+mapTxt(gm)+T('</b><small>приход за период</small></div><div class="stat s3"><b class="')+(low?'o':'')+'">'+low+T('</b><small>заканчивается (≤3 шт)</small></div><div class="stat s3"><b class="')+(np?'o':'')+'">'+np+T('</b><small>без цены (не в стоимости)</small></div></div>');
   if(isOwn){
@@ -807,7 +818,7 @@ function hist(){
   [].forEach.call(document.querySelectorAll('[data-rt]'),function(b){b.onclick=function(){restItem(b.dataset.rt)}});
   [].forEach.call(document.querySelectorAll('#pc .chip'),function(c){c.onclick=function(){hp=+c.dataset.d;hist()}});
   $('e1').onclick=function(){dl('sklad-ostatki.csv',[[T('Название'),T('Категория'),T('Размер'),T('Цвет'),T('Цена'),T('Остаток'),T('Сумма'),T('Штрихкод')]].concat(S.items.map(function(i){return [i.name,i.cat,i.size,i.color,i.price||0,i.qty,vOf(i),i.bc||'']})))};
-  $('e2').onclick=function(){dl('sklad-istoriya.csv',[[T('Дата'),T('Время'),T('Операция'),T('Товар'),T('Кол-во'),T('Сумма'),T('Заметка'),T('Сотрудник')]].concat(S.log.map(function(l){var d=new Date(l.t);return [d.toLocaleDateString('ru-RU'),d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),l.type==='in'?T('Приход'):l.type==='out'?T('Расход'):T('Пересчёт'),l.name,l.qty,l.sum||0,l.note||'',l.by||'']})))};
+  $('e2').onclick=function(){dl('sklad-istoriya.csv',[[T('Дата'),T('Время'),T('Операция'),T('Товар'),T('Кол-во'),T('Сумма'),T('Заметка'),T('Сотрудник')]].concat(S.log.map(function(l){var d=new Date(l.t);return [d.toLocaleDateString('ru-RU'),d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),l.type==='in'?T('Привёз'):l.type==='out'?T('Продал'):T('Пересчёт'),l.name,l.qty,l.sum||0,l.note||'',l.by||'']})))};
   $('e3').onclick=function(){dl('sklad-backup-'+new Date().toISOString().slice(0,10)+'.json',null,JSON.stringify({v:2,items:S.items,log:S.log,cats:S.cats,biz:S.biz||'',debts:{people:D.people,ops:D.ops}}))};
   $('e4').onclick=restoreUI;
   if($('rp'))$('rp').onclick=function(){
@@ -1002,7 +1013,14 @@ function pasteTel(sel,inp){
   try{navigator.clipboard.readText().then(function(t){t=String(t||'').trim();if(!t){hint();return}$(inp).value=t;smartPh(sel,inp);toast(T('📋 Номер вставлен'))},hint)}catch(e){hint()}
 }
 function dpf(id){return D.people.filter(function(p){return p.id===id})[0]}
-function dbal(id){return D.ops.reduce(function(a,o){return o.pid===id?a+DT[o.type][1]*o.amt:a},0)}
+/* Остаток долга. Округление до копейки — не для красоты: дробные суммы
+   складываются неточно, и 85.10 + 220.20 − 305.30 даёт не ноль, а −0.00000000000006.
+   Без округления программа считала такой долг незакрытым и показывала, что
+   магазин должен человеку. Из-за этого в лавке и спорят. */
+function dbal(id){
+  var b=Math.round(D.ops.reduce(function(a,o){return o.pid===id?a+DT[o.type][1]*o.amt:a},0)*100)/100;
+  return b===0?0:b;   // иначе выходит «минус ноль» и на экране «−0 сомони»
+}
 function dlate(id){var b=dbal(id),td=lk(new Date()),m='';if(!b)return '';
   D.ops.forEach(function(o){if(o.pid===id&&o.due&&o.due<td&&((b>0&&o.type==='give')||(b<0&&o.type==='get'))&&(!m||o.due<m))m=o.due});var pp=dpf(id);if(pp&&pp.due&&pp.due<td&&(!m||pp.due<m))m=pp.due;return m}
 function dsave(){dpend=null;try{localStorage.setItem('skladgo.debts',JSON.stringify(D))}catch(e){}revDebts++;dirtyDebts=true;LSS('skladgo.dirty.debts','1');dpush()}
@@ -1266,7 +1284,7 @@ function getSample(){if(smp)return smp;smp=(window.claude?claude.use('sample'):P
 function fmtB(t){return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
 function propHtml(p){
   if(p.k==='msg')return '<div class="prop"><b>'+(p.ch==='wa'?'💬 WhatsApp Business':'✉️ SMS')+' → '+esc(p.name)+'</b><small>'+esc(p.phone)+'</small><div style="margin:6px 0;font-size:14px">«'+esc(p.text)+'»</div>'+(p.done?'<span class="'+(p.done==='ok'?'i':'o')+'">'+(p.done==='ok'?T('✅ Открыто — нажмите «Отправить» в приложении'):T('✖ Отменено'))+'</span>':'<div class="row"><button class="go ac" data-ok="'+p.id+T('" style="padding:10px;font-size:15px">✓ Открыть ')+(p.ch==='wa'?'WhatsApp Business':'SMS')+'</button><button class="go" data-no="'+p.id+T('" style="padding:10px;font-size:15px;background:var(--card);color:var(--tx);border:1px solid var(--bd)">Отмена</button></div>'))+'</div>';
-  var it=p.k==='stock'?find(p.item):null,txt=p.k==='stock'?(p.ty==='in'?T('＋ Приход'):T('− Расход'))+' · '+(it?lab(it):T('товар'))+' × '+p.n:(p.ty==='give'?T('⬆ Я дал в долг'):T('⬇ Я получил'))+' · '+p.name+' · '+money(p.am);
+  var it=p.k==='stock'?find(p.item):null,txt=p.k==='stock'?(p.ty==='in'?T('＋ Привёз'):T('− Продал'))+' · '+(it?lab(it):T('товар'))+' × '+p.n:(p.ty==='give'?T('⬆ Я дал в долг'):T('⬇ Я получил'))+' · '+p.name+' · '+money(p.am);
   return T('<div class="prop"><b>🧾 Предложение</b><br>')+esc(txt)+(p.done?'<br><span class="'+(p.done==='ok'?'i':'o')+'">'+(p.done==='ok'?T('✅ Выполнено'):T('✖ Отменено'))+'</span>':'<div class="row" style="margin-top:8px"><button class="go ac" data-ok="'+p.id+T('" style="padding:10px;font-size:15px">✓ Выполнить</button><button class="go" data-no="')+p.id+T('" style="padding:10px;font-size:15px;background:var(--card);color:var(--tx);border:1px solid var(--bd)">Отмена</button></div>'))+'</div>';
 }
 function msgHtml(m,last){
@@ -1430,13 +1448,88 @@ function twoFaNewCodes(){
   };
 }
 
+
+/* ---------- Кто заходил ----------
+   Сервер давно записывал каждый вход и каждый промах, но видеть их было негде.
+   А замечают, что пароль подбирают, именно по ним: три промаха ночью — повод
+   сменить пароль, пока не поздно. */
+var secLog=null;
+var SECW={login:'вошёл',login_backup:'вошёл по запасному коду',login_fail:'неверный пароль',totp_fail:'неверный код из приложения',
+  password_change:'сменил пароль',password_reset:'сбросил пароль',totp_on:'включил второй фактор',totp_off:'выключил второй фактор',
+  totp_backup_new:'выдал новые запасные коды',register:'зарегистрировался',verify:'подтвердил почту',staff_update:'изменил сотрудника',
+  invite_rotate:'сменил код приглашения',delete_account:'удалил аккаунт',admin_password:'пароль выдан с сервера',
+  admin_totp_off:'второй фактор снят с сервера',admin_backup_new:'запасные коды выданы с сервера',admin_unblock:'доступ открыт с сервера'};
+var SECIP={login:1,login_fail:1,login_backup:1,totp_fail:1};
+function secPanel(){
+  if(!isOwn||!window.skladAuth||!window.skladAuth.securityLog)return '';
+  var h=T('<div class="panel"><h3>🛡 Кто заходил</h3><small style="color:var(--mu)">Последние входы и неудачные попытки. Несколько промахов подряд — повод сменить пароль.</small>');
+  if(secLog===null)h+=T('<button class="link" id="secgo">Показать</button>');
+  else if(!secLog.length)h+=T('<div class="empty">Записей пока нет</div>');
+  else{
+    var плохо=secLog.filter(function(e){return e.action==='login_fail'||e.action==='totp_fail'}).length;
+    if(плохо)h+='<div class="log" style="margin-top:8px"><div><b>⚠️ '+T('Неудачных попыток: ')+плохо+T('</b><small>за последние ')+secLog.length+T(' записей</small></div></div>');
+    h+=secLog.slice(0,25).map(function(e){
+      var d=new Date(e.t),bad=e.action==='login_fail'||e.action==='totp_fail';
+      // Подробность показываем только там, где это адрес, с которого входили.
+      // У остальных записей в ней служебные номера — хозяину магазина они ни к чему.
+      var адрес=SECIP[e.action]&&e.detail?' · '+esc(e.detail):'';
+      return '<div class="log"><div style="min-width:0"><b'+(bad?' style="color:var(--out)"':'')+'>'+esc(e.name||e.email)+'</b><small>'+
+        T(SECW[e.action]||e.action)+адрес+'</small></div><span style="color:var(--mu);font-size:12px">'+
+        esc(dshort(e.t))+' '+esc(('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2))+'</span></div>';
+    }).join('');
+    h+=T('<button class="link" id="secgo">Обновить</button>');
+  }
+  return h+'</div>';
+}
+function secBind(){
+  var b=$('secgo');if(!b)return;
+  b.onclick=function(){
+    b.disabled=true;b.textContent=T('Загружаю…');
+    window.skladAuth.securityLog().then(function(r){secLog=r.events||[];if(tab==='team')team()},
+      function(e){b.disabled=false;b.textContent=T('Показать');toast('⚠️ '+((e&&e.message)||T('Не удалось')))});
+  };
+}
+
+
+/* ---------- «Входили не с вашего телефона» ----------
+   Писем сервер не шлёт, поэтому единственное место, где человек об этом
+   узнает, — экран программы при первом же открытии. Поэтому полоса висит
+   поверх всего и не исчезает сама: её надо закрыть руками. */
+function devAlert(){
+  if(!window.skladAuth||!window.skladAuth.newDevices)return '';
+  var d=window.skladAuth.newDevices();
+  if(!d||!d.length)return '';
+  var когда=new Date(d[0].t), чем=devName(d[0].ua);
+  return '<div class="panel" id="devw" style="border-color:var(--out);border-width:2px">'
+    +'<b style="color:var(--out)">⚠️ '+T('Вход с другого устройства')+'</b>'
+    +'<small style="display:block;margin:6px 0">'+esc(dshort(d[0].t))+' '+esc(('0'+когда.getHours()).slice(-2)+':'+('0'+когда.getMinutes()).slice(-2))
+    +' · '+esc(чем)+(d.length>1?T(' и ещё ')+(d.length-1):'')+'</small>'
+    +'<small style="display:block;color:var(--mu)">'+T('Если это были не вы — сразу смените пароль и включите второй фактор.')+'</small>'
+    +T('<div class="two" style="margin-top:8px"><button class="go" id="devok" style="background:var(--bd);color:var(--tx)">Это был я</button><button class="go ac" id="devpw">Сменить пароль</button></div>')
+    +'</div>';
+}
+// Из длинной строки браузера делаем человеческое: «Телефон Android», «Компьютер Windows»
+function devName(ua){
+  var u=String(ua||'');
+  var сист=/Android/i.test(u)?'Android':/iPhone|iPad|iOS/i.test(u)?'iPhone':/Windows/i.test(u)?'Windows':/Mac OS/i.test(u)?'Mac':/Linux/i.test(u)?'Linux':'';
+  var вид=/Mobile|Android|iPhone/i.test(u)?T('Телефон'):T('Компьютер');
+  return сист?вид+' '+сист:вид;
+}
+function devBind(){
+  if(!$('devok'))return;
+  $('devok').onclick=function(){window.skladAuth.ackDevices().catch(function(){});render()};
+  $('devpw').onclick=function(){window.skladAuth.ackDevices().catch(function(){});tab='team';render();setTimeout(function(){toast(T('Смените пароль в настройках аккаунта'))},300)};
+}
+
 function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
-  var h=T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
+  var h=devAlert()+T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
   if(window.skladAuth)h+=T('<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>')+(isOwn?'':T('<button class="link del" id="da">🗑 Удалить мой аккаунт</button>'))+'</div>';
+  h+=T('<div class="lbl">🎨 Вид</div>')+chipsHtml('th',[['light',T('Светлый')],['dark',T('Тёмный')],['auto',T('Как на телефоне')]],window.SkladTheme?window.SkladTheme.get():'light')+'<div style="height:12px"></div>';
   h+=T('<div class="lbl">🌐 Язык / Забон</div><div class="g2" id="lg" style="margin:4px 0 12px"><button data-lg="ru" style="')+(window.SKLAD_LANG==='ru'?'border-color:var(--ac);color:var(--ac)':'')+T('">Русский</button><button data-lg="tg" style="')+(window.SKLAD_LANG==='tg'?'border-color:var(--ac);color:var(--ac)':'')+T('">Тоҷикӣ</button></div>');
   if(isOwn)h+=T('<div class="lbl">💱 Валюта магазина</div><select id="cu">')+Object.keys(CURS).map(function(k){return '<option value="'+k+'"'+((S.cur||'TJS')===k?' selected':'')+'>'+CURS[k][window.SKLAD_LANG==='tg'?1:0]+'</option>'}).join('')+'</select>';
   h+=twoFaPanel();
+  h+=secPanel();
   if(isOwn){
     h+=T('<div class="panel"><h3>🔗 Ссылка для своих сотрудников</h3><small style="color:var(--mu)">Кто придёт по ней — попадёт в ваш магазин и будет ждать подтверждения. Кто зарегистрируется без неё — заведёт свой отдельный склад.</small>');
     h+=shopInvite
@@ -1454,16 +1547,18 @@ function team(){
   h+=T('<div class="lbl" style="margin-top:14px">Лента изменений</div>');
   if(!actList.length)h+=T('<div class="empty">Изменений пока нет</div>');
   h+=actList.slice(0,40).map(function(a){var d=new Date(a.t);return '<div class="log"><div><b>'+esc(a.by||'—')+'</b><small>'+esc(feedT(a.txt))+'</small></div><span style="color:var(--mu);font-size:12px;text-align:right">'+d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+'<br>'+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span></div>'}).join('');
-  $('app').innerHTML=h;$('me').onclick=function(){gate(true)};
+  $('app').innerHTML=h;devBind();$('me').onclick=function(){gate(true)};
   if($('lo'))$('lo').onclick=function(){if(anyDirty()&&this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent=T('❗ Не всё отправлено! Нажмите ещё раз — выйти и потерять');return}window.skladAuth.signOut()};
   if($('da'))$('da').onclick=function(){
     open(T('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Введите пароль для подтверждения. Данные склада останутся.</small><input id="dpw" type="password" placeholder="Пароль" autocomplete="current-password"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>'));
     $('dok').onclick=function(){window.skladAuth.deleteAccount($('dpw').value).catch(function(e){toast('⚠️ '+((e&&e.message)||T('Не удалось удалить')))})};
   };
+  secBind();
   if($('t2set'))$('t2set').onclick=twoFaSetup;
   if($('t2off'))$('t2off').onclick=twoFaOff;
   if($('t2new'))$('t2new').onclick=twoFaNewCodes;
   [].forEach.call(document.querySelectorAll('#lg button'),function(b){b.onclick=function(){if(b.dataset.lg!==window.SKLAD_LANG)setLang(b.dataset.lg)}});
+  if(window.SkladTheme)bindChips('th',function(v){window.SkladTheme.set(v);render()});
   if($('cu'))$('cu').onchange=function(){S.cur=this.value;save();toast('✓ '+CL());render()};
   if(isOwn&&shopInvite===null&&sdb){shopInvite='';sdb.doc('meta/invite').get().then(function(sn){shopInvite=(sn.data()||{}).code||'';if(tab==='team')team()},function(){shopInvite=''})}
   if($('invcopy'))$('invcopy').onclick=function(){
