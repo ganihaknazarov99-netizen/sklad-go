@@ -27,6 +27,16 @@ CREATE TABLE IF NOT EXISTS codes(
   PRIMARY KEY(user_id, purpose),
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS devices(
+  user_id TEXT NOT NULL,
+  dev TEXT NOT NULL,                          -- отпечаток устройства
+  ua TEXT NOT NULL DEFAULT '',
+  first_seen INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL,
+  ack INTEGER NOT NULL DEFAULT 0,             -- хозяин увидел и подтвердил
+  PRIMARY KEY(user_id, dev),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS backup_codes(
   user_id TEXT NOT NULL,
   code_hash TEXT NOT NULL,
@@ -92,6 +102,13 @@ function migrate(db) {
     db.exec('ALTER TABLE users ADD COLUMN totp_on INTEGER NOT NULL DEFAULT 0');
     db.exec('ALTER TABLE users ADD COLUMN totp_step INTEGER NOT NULL DEFAULT -1');
   }
+  // Замок после неудачных попыток и привязка входа к устройству
+  if (!cols.includes('lock_until')) {
+    db.exec('ALTER TABLE users ADD COLUMN lock_until INTEGER NOT NULL DEFAULT 0');
+    db.exec('ALTER TABLE users ADD COLUMN fails INTEGER NOT NULL DEFAULT 0');
+  }
+  const sc = db.prepare('PRAGMA table_info(sessions)').all().map((c) => c.name);
+  if (!sc.includes('dev')) db.exec("ALTER TABLE sessions ADD COLUMN dev TEXT NOT NULL DEFAULT ''");
   if (!cols.includes('shop_id')) {
     db.exec("ALTER TABLE users ADD COLUMN shop_id TEXT NOT NULL DEFAULT ''");
     db.exec('CREATE INDEX IF NOT EXISTS idx_users_shop ON users(shop_id)');

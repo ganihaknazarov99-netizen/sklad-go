@@ -488,7 +488,7 @@ function stock(){
   var td=dkey(Date.now()),val=0,tot=0,inn=0,out=0,rev=0;
   S.items.forEach(function(i){val+=vOf(i);tot+=i.qty});
   S.log.forEach(function(l){if(l.inv)return;if(dkey(l.t)===td){if(l.type==='in')inn+=l.qty;else if(l.type==='out'){out+=l.qty;rev+=l.sum||0}}});
-  var h='<h1>'+LOGO+T('<small id="syi" style="display:inline;font-size:12px" title="Общий склад">')+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+T('</b><small>стоимость склада · ')+unitsTxt(S.items)+T(' · подробнее ›</small></div><div class="stat"><b>')+money(rev)+T('</b><small>выручка сегодня</small></div><div class="stat"><b class="i">＋')+inn+T('</b><small>привезли, шт</small></div><div class="stat"><b class="o">−')+out+T('</b><small>продали, шт</small></div></div>');
+  var h=devAlert()+'<h1>'+LOGO+T('<small id="syi" style="display:inline;font-size:12px" title="Общий склад">')+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+T('</b><small>стоимость склада · ')+unitsTxt(S.items)+T(' · подробнее ›</small></div><div class="stat"><b>')+money(rev)+T('</b><small>выручка сегодня</small></div><div class="stat"><b class="i">＋')+inn+T('</b><small>привезли, шт</small></div><div class="stat"><b class="o">−')+out+T('</b><small>продали, шт</small></div></div>');
   h+='<div class="srow">'+T('<input id="q" type="search" placeholder="Поиск: название, размер, цвет…" value="')+esc(q)+'"><button class="scanb" id="scb" type="button" aria-label="'+T('Сканер штрихкода')+'">▥</button></div>';
   h+='<div class="chips">'+['Все','⚠️ Мало','🗄 Архив'].concat(S.cats).map(function(c){return '<div class="chip'+(c===cat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</div>'}).join('')+'</div>';
   h+='<div style="display:flex;justify-content:flex-end;gap:14px;margin:-2px 0 8px"><button class="link" id="tgst">'+T('🏷 Ценники')+'</button><button class="link" id="invst">'+(S.inv?T('📋 Продолжить пересчёт'):T('📋 Пересчёт склада'))+'</button></div>';
@@ -498,6 +498,7 @@ function stock(){
   if(cat==='🗄 Архив'&&L.length)h+=T('<div class="lbl">Нет в наличии. Нажмите ＋ — товар вернётся на склад.</div>');
   h+=listHtml(L);
   $('app').innerHTML=h;
+  devBind();
   $('scb').onclick=function(){scMode='find';scanUI('find')};
   var qi=$('q');qi.onkeydown=function(e){
     if(e.key!=='Enter')return;var v=this.value.trim();if(v.length<4||/\s/.test(v))return;
@@ -1489,9 +1490,40 @@ function secBind(){
   };
 }
 
+
+/* ---------- «Входили не с вашего телефона» ----------
+   Писем сервер не шлёт, поэтому единственное место, где человек об этом
+   узнает, — экран программы при первом же открытии. Поэтому полоса висит
+   поверх всего и не исчезает сама: её надо закрыть руками. */
+function devAlert(){
+  if(!window.skladAuth||!window.skladAuth.newDevices)return '';
+  var d=window.skladAuth.newDevices();
+  if(!d||!d.length)return '';
+  var когда=new Date(d[0].t), чем=devName(d[0].ua);
+  return '<div class="panel" id="devw" style="border-color:var(--out);border-width:2px">'
+    +'<b style="color:var(--out)">⚠️ '+T('Вход с другого устройства')+'</b>'
+    +'<small style="display:block;margin:6px 0">'+esc(dshort(d[0].t))+' '+esc(('0'+когда.getHours()).slice(-2)+':'+('0'+когда.getMinutes()).slice(-2))
+    +' · '+esc(чем)+(d.length>1?T(' и ещё ')+(d.length-1):'')+'</small>'
+    +'<small style="display:block;color:var(--mu)">'+T('Если это были не вы — сразу смените пароль и включите второй фактор.')+'</small>'
+    +T('<div class="two" style="margin-top:8px"><button class="go" id="devok" style="background:var(--bd);color:var(--tx)">Это был я</button><button class="go ac" id="devpw">Сменить пароль</button></div>')
+    +'</div>';
+}
+// Из длинной строки браузера делаем человеческое: «Телефон Android», «Компьютер Windows»
+function devName(ua){
+  var u=String(ua||'');
+  var сист=/Android/i.test(u)?'Android':/iPhone|iPad|iOS/i.test(u)?'iPhone':/Windows/i.test(u)?'Windows':/Mac OS/i.test(u)?'Mac':/Linux/i.test(u)?'Linux':'';
+  var вид=/Mobile|Android|iPhone/i.test(u)?T('Телефон'):T('Компьютер');
+  return сист?вид+' '+сист:вид;
+}
+function devBind(){
+  if(!$('devok'))return;
+  $('devok').onclick=function(){window.skladAuth.ackDevices().catch(function(){});render()};
+  $('devpw').onclick=function(){window.skladAuth.ackDevices().catch(function(){});tab='team';render();setTimeout(function(){toast(T('Смените пароль в настройках аккаунта'))},300)};
+}
+
 function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
-  var h=T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
+  var h=devAlert()+T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
   if(window.skladAuth)h+=T('<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>')+(isOwn?'':T('<button class="link del" id="da">🗑 Удалить мой аккаунт</button>'))+'</div>';
   h+=T('<div class="lbl">🎨 Вид</div>')+chipsHtml('th',[['light',T('Светлый')],['dark',T('Тёмный')],['auto',T('Как на телефоне')]],window.SkladTheme?window.SkladTheme.get():'light')+'<div style="height:12px"></div>';
   h+=T('<div class="lbl">🌐 Язык / Забон</div><div class="g2" id="lg" style="margin:4px 0 12px"><button data-lg="ru" style="')+(window.SKLAD_LANG==='ru'?'border-color:var(--ac);color:var(--ac)':'')+T('">Русский</button><button data-lg="tg" style="')+(window.SKLAD_LANG==='tg'?'border-color:var(--ac);color:var(--ac)':'')+T('">Тоҷикӣ</button></div>');
@@ -1515,7 +1547,7 @@ function team(){
   h+=T('<div class="lbl" style="margin-top:14px">Лента изменений</div>');
   if(!actList.length)h+=T('<div class="empty">Изменений пока нет</div>');
   h+=actList.slice(0,40).map(function(a){var d=new Date(a.t);return '<div class="log"><div><b>'+esc(a.by||'—')+'</b><small>'+esc(feedT(a.txt))+'</small></div><span style="color:var(--mu);font-size:12px;text-align:right">'+d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+'<br>'+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span></div>'}).join('');
-  $('app').innerHTML=h;$('me').onclick=function(){gate(true)};
+  $('app').innerHTML=h;devBind();$('me').onclick=function(){gate(true)};
   if($('lo'))$('lo').onclick=function(){if(anyDirty()&&this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent=T('❗ Не всё отправлено! Нажмите ещё раз — выйти и потерять');return}window.skladAuth.signOut()};
   if($('da'))$('da').onclick=function(){
     open(T('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Введите пароль для подтверждения. Данные склада останутся.</small><input id="dpw" type="password" placeholder="Пароль" autocomplete="current-password"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>'));

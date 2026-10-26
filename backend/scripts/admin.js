@@ -64,6 +64,7 @@ switch (cmd) {
       console.log(
         '  ' + u.email.padEnd(32) + ' ' + кто.padEnd(10) + ' ' + сост.padEnd(20) +
         ' второй фактор: ' + (u.totp_on ? 'включён' : 'выключен') +
+        (u.lock_until > Date.now() ? '  ⛔ ЗАПЕРТ до ' + new Date(u.lock_until).toLocaleTimeString('ru-RU') : '') +
         (u.shop ? '   магазин: ' + u.shop : '')
       );
     }
@@ -109,6 +110,27 @@ switch (cmd) {
     break;
   }
 
+  case 'unlock': {
+    const u = findUser();
+    db.prepare('UPDATE users SET fails=0,lock_until=0,updated_at=? WHERE id=?').run(now(), u.id);
+    audit(u.id, 'admin_unlock', 'с сервера');
+    console.log('\n  Замок с ' + u.email + ' снят, попытки обнулены.\n');
+    break;
+  }
+
+  case 'devices': {
+    const u = findUser();
+    const rows = db.prepare('SELECT * FROM devices WHERE user_id=? ORDER BY last_seen DESC').all(u.id);
+    if (!rows.length) { console.log('\n  Устройств пока не записано.\n'); break; }
+    console.log('\n  Устройства, с которых входили как ' + u.email + ':\n');
+    for (const d of rows) {
+      console.log('   ' + new Date(d.first_seen).toLocaleString('ru-RU') + '  ' +
+        (d.ack ? 'своё   ' : 'НЕ ПОДТВЕРЖДЕНО') + '  ' + String(d.ua).slice(0, 70));
+    }
+    console.log('');
+    break;
+  }
+
   case 'unblock': {
     const u = findUser();
     db.prepare('UPDATE users SET status=?,updated_at=? WHERE id=?').run('active', now(), u.id);
@@ -126,6 +148,8 @@ switch (cmd) {
       node scripts/admin.js 2fa-off  почта@...   снять второй фактор (телефон потерян)
       node scripts/admin.js codes    почта@...   выдать новые запасные коды
       node scripts/admin.js unblock  почта@...   открыть доступ заблокированному
+      node scripts/admin.js unlock   почта@...   снять замок после неудачных попыток
+      node scripts/admin.js devices  почта@...   с каких устройств входили
 
   Останавливать сервер не нужно. Каждое действие записывается в журнал.
 `);

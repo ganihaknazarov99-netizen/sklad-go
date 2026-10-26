@@ -5,7 +5,7 @@
   var TOKEN_KEY = 'skladgo.token';
   var $ = function (i) { return document.getElementById(i); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
-  var token = null, user = null, started = false;
+  var token = null, user = null, started = false, newDevices = null;
   try { token = localStorage.getItem(TOKEN_KEY); } catch (e) {}
 
   var ERR = {
@@ -13,6 +13,7 @@
     weak_password: T('Пароль: минимум 8 символов, должны быть буквы и цифры'), bad_email: T('Проверьте адрес почты'), name_required: T('Введите имя'), bad_phone: T('Проверьте номер телефона'),
     code_wrong: T('Неверный код'), code_expired: T('Код не найден или истёк — запросите новый'), code_locked: T('Слишком много неверных попыток — запросите новый код'),
     mail_failed: T('Не удалось отправить письмо с кодом. Попробуйте через минуту или напишите владельцу'), too_soon: T('Подождите минуту перед повторной отправкой'), rate_limited: T('Слишком много попыток, подождите немного'), owner_cannot_delete: T('Владелец не может удалить аккаунт'),
+    account_locked: T('Слишком много неверных паролей. Вход закрыт на 15 минут — так мы останавливаем подбор'),
     bad_code: T('Неверный код из приложения'), pending_expired: T('Время вышло — введите пароль заново'),
     too_many_codes: T('Слишком много неверных кодов — начните вход заново'), totp_already_on: T('Второй фактор уже включён'),
     totp_not_started: T('Сначала получите секрет'), totp_off: T('Второй фактор выключен'),
@@ -95,6 +96,8 @@
   window.skladAuth = {
     me: function () { return user; },
     securityLog: function () { return request('GET', '/api/security'); },
+    newDevices: function () { return newDevices; },
+    ackDevices: function () { newDevices = null; return request('POST', '/api/devices/ack', {}); },
     twoFactor: {
       // Программа открывается и без связи, по сохранённым данным. Если их не
       // обновить, назавтра она скажет, что второго фактора нет, хотя он есть.
@@ -222,7 +225,7 @@
 
   // Старт: если есть сохранённая сессия — проверяем её
   if (token) {
-    request('GET', '/api/me').then(function (r) { user = r.user; startApp(); }, function (e) {
+    request('GET', '/api/me').then(function (r) { user = r.user; newDevices = r.newDevices || null; startApp(); }, function (e) {
       if (e.code === 'not_verified') { token = null; loginUI(T('Подтвердите почту и войдите')); } else if (e.code === 'network') {
         var cu = null; try { cu = JSON.parse(localStorage.getItem('skladgo.user')); } catch (x) {}
         if (cu && cu.id) { user = cu; startApp(); } // без интернета: открываем программу с данными, сохранёнными на телефоне

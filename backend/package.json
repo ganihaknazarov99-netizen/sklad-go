@@ -6,6 +6,6 @@
   "engines": { "node": ">=22.13" },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test --no-warnings"
+    "test": "node --test --no-warnings --test-concurrency=1 --test-timeout=30000"
   }
 }

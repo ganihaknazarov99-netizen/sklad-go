@@ -114,11 +114,15 @@ test('пароль: слабый отклоняется, чужой пароль
   await t.app.close();
 });
 
-test('ограничение попыток входа: 5 неудач блокируют вход на время', async () => {
+test('ограничение попыток входа: 5 неудач запирают учётную запись на время', async () => {
   const t = await boot();
   await t.signup('lock@gmail.com', 'L');
   for (let i = 0; i < 5; i++) await t.call('POST', '/api/auth/login', { email: 'lock@gmail.com', password: 'badbadbad1' });
-  assert.equal((await t.call('POST', '/api/auth/login', { email: 'lock@gmail.com', password: 'password123' })).status, 429);
+  // Раньше отвечал ограничитель частоты глухим 429. Теперь — замок,
+  // и человеку сказано, сколько ждать: подробности в test/device.test.js.
+  const r = await t.call('POST', '/api/auth/login', { email: 'lock@gmail.com', password: 'password123' });
+  assert.equal(r.status, 423);
+  assert.ok(r.body.minutes > 0, 'должно быть сказано, на сколько заперто');
   await t.app.close();
 });
 

@@ -58,6 +58,7 @@ function createApp(options = {}) {
     if (m === 'POST' && p === '/api/auth/reset') return send(res, 200, await A.reset(req, body, ip));
     if (m === 'POST' && p === '/api/auth/change-password') return send(res, 200, await A.changePassword(req, body));
     if (m === 'GET' && p === '/api/me') return send(res, 200, await A.me(req));
+    if (m === 'POST' && p === '/api/devices/ack') return send(res, 200, await A.ackDevices(req));
     if (m === 'GET' && p === '/api/security') return send(res, 200, await A.securityLog(req));
     if (m === 'PATCH' && p === '/api/me') return send(res, 200, await A.updateMe(req, body));
     if (m === 'DELETE' && p === '/api/me') return send(res, 200, await A.deleteMe(req, body));
