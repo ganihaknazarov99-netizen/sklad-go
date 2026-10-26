@@ -39,6 +39,24 @@ function doPush(n,pre){
     if(!anyDirty())setSy('ok');
   },function(e){
     pending=false;
+    /* Сервер не принял переписанную историю. Слияние тут не поможет —
+       оно сохранит нашу же правку и упрётся снова. Берём историю с сервера
+       как есть и объясняем человеку, что произошло. */
+    if(e&&e.code==='log_vanished'){
+      dbd.get().then(function(sn){
+        if(sn.exists){
+          var R=cleanMain(sn.data());
+          mergeMainIn(sn.data(),sn.version);
+          S.log=clone(R.log||[]);            // спорные записи — только серверные
+          try{localStorage.setItem(KEY,JSON.stringify(S))}catch(x){}   // без save(): он бы снова всё отправил
+          baseMain=clone(cleanMain(mainPayload()));LSS('skladgo.base.main',JSON.stringify(baseMain));
+        }
+        dirtyMain=false;LSS('skladgo.dirty.main','0');setSy('ok');
+        toast('⚠️ '+(e.message||T('История взята с сервера как есть')));
+        render();
+      },function(){setSy('off');scheduleRetry()});
+      return;
+    }
     if(e&&e.code==='version_conflict'&&n<4){
       dbd.get().then(function(sn){if(sn.exists)mergeMainIn(sn.data(),sn.version);doPush(n+1)},function(){setSy('off');scheduleRetry()});
     }else{setSy(isNet(e)?'off':'err');scheduleRetry()}
@@ -1038,6 +1056,27 @@ function ddoPush(n,pre){
     if(!anyDirty())setSy('ok');
   },function(e){
     dpending=false;
+    /* Сервер не принял переписанный долг. Слать то же самое по кругу
+       бессмысленно, а слияние тут не поможет: оно сохранит нашу же правку
+       и упрётся снова. Поэтому записи долгов берём с сервера как есть —
+       они там правдивые, — и говорим человеку, что произошло. */
+    var отказ=e&&(e.code==='debt_changed'||e.code==='debt_vanished');
+    if(отказ){
+      ddb.get().then(function(sn){
+        if(sn.exists){
+          var R=cleanDebts(sn.data());
+          dmergeIn(sn.data(),sn.version);
+          D.ops=clone(R.ops||[]);            // спорные записи — только серверные
+          D=dnorm(D);
+          try{localStorage.setItem('skladgo.debts',JSON.stringify(D))}catch(x){}
+          baseDebts=clone(cleanDebts(debtsPayload()));LSS('skladgo.base.debts',JSON.stringify(baseDebts));
+        }
+        dirtyDebts=false;LSS('skladgo.dirty.debts','0');setSy('ok');
+        toast('⚠️ '+(e.message||T('Долг взят с сервера как есть')));
+        render();
+      },function(){setSy('off');scheduleRetry()});
+      return;
+    }
     if(e&&e.code==='version_conflict'&&n<4){
       ddb.get().then(function(sn){if(sn.exists)dmergeIn(sn.data(),sn.version);ddoPush(n+1)},function(){setSy('off');scheduleRetry()});
     }else{setSy(isNet(e)?'off':'err');scheduleRetry()}
