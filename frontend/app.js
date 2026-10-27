@@ -1560,6 +1560,29 @@ function devBind(){
   $('devpw').onclick=function(){window.skladAuth.ackDevices().catch(function(){});tab='team';render();setTimeout(function(){toast(T('Смените пароль в настройках аккаунта'))},300)};
 }
 
+/* Убрать человека из магазина. В отличие от блокировки — насовсем:
+   уйдут его вход, устройства и коды. Имя в истории продаж останется:
+   что было, то было. Спрашиваем дважды, назад дороги нет. */
+function delStaff(id,btn){
+  var x=staff.filter(function(s){return s._id===id})[0];
+  if(!x)return;
+  if(btn.dataset.ok!=='1'){
+    btn.dataset.ok='1';btn.textContent=T('❗ Ещё раз — убрать насовсем');
+    setTimeout(function(){if(btn.dataset.ok==='1'){btn.dataset.ok='';btn.textContent=T('Убрать')}},6000);
+    return;
+  }
+  if(!sdb){toast(T('⚠️ Нужна связь с сервером'));return}
+  btn.disabled=true;
+  sdb.doc('staff/'+id).delete().then(function(){
+    staff=staff.filter(function(s){return s._id!==id});
+    logAct('убрал сотрудника: '+x.name);
+    toast(T('Сотрудник убран: ')+x.name);
+    render();
+  },function(e){
+    btn.disabled=false;btn.dataset.ok='';btn.textContent=T('Убрать');
+    toast('⚠️ '+((e&&e.message)||T('Не удалось убрать')));
+  });
+}
 function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h=devAlert()+T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
@@ -1582,7 +1605,7 @@ function team(){
   if(isOwn&&pd.length)h+=T('<div class="lbl">Ждут подтверждения (')+pd.length+')</div>'+pd.map(function(x){return '<div class="card"><div class="info"><b>'+esc(x.name)+'</b><small>'+esc(x.phone)+' · '+esc(x.mail)+'</small></div><button class="link" data-ap="'+x._id+T('">✓ Разрешить</button><button class="link del" data-bl="')+x._id+'">✕</button></div>'}).join('');
   h+=T('<div class="lbl">Сотрудники склада (')+ac.length+')</div>';
   if(!ac.length)h+=T('<div class="empty">Сотрудники появятся здесь после регистрации по вашей ссылке</div>');
-  ac.sort(function(a,b){return String(a.name).localeCompare(String(b.name),'ru')}).forEach(function(x){h+='<div class="card"><div class="info"><b>'+(x.owner?'👑 ':'')+esc(x.name)+(x.status==='blocked'?T(' · ⛔ заблокирован'):'')+'</b>'+(isOwn?'<small>'+esc(x.phone)+' · '+esc(x.mail)+'</small>':'')+'</div>'+(isOwn&&!x.owner?(x.status==='blocked'?'<button class="link" data-ap="'+x._id+T('">Вернуть доступ</button>'):'<button class="link del" data-bl="'+x._id+T('">Заблокировать</button>')):'')+'</div>'});
+  ac.sort(function(a,b){return String(a.name).localeCompare(String(b.name),'ru')}).forEach(function(x){h+='<div class="card"><div class="info"><b>'+(x.owner?'👑 ':'')+esc(x.name)+(x.status==='blocked'?T(' · ⛔ заблокирован'):'')+'</b>'+(isOwn?'<small>'+esc(x.phone)+' · '+esc(x.mail)+'</small>':'')+'</div>'+(isOwn&&!x.owner?(x.status==='blocked'?'<button class="link" data-ap="'+x._id+T('">Вернуть доступ</button>'):'<button class="link del" data-bl="'+x._id+T('">Заблокировать</button>'))+'<button class="link del" data-rm="'+x._id+T('">Убрать</button>'):'')+'</div>'});
   h+=T('<div class="lbl" style="margin-top:14px">Лента изменений</div>');
   if(!actList.length)h+=T('<div class="empty">Изменений пока нет</div>');
   h+=actList.slice(0,40).map(function(a){var d=new Date(a.t);return '<div class="log"><div><b>'+esc(a.by||'—')+'</b><small>'+esc(feedT(a.txt))+'</small></div><span style="color:var(--mu);font-size:12px;text-align:right">'+d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+'<br>'+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span></div>'}).join('');
@@ -1611,6 +1634,7 @@ function team(){
   if($('bzs'))$('bzs').onclick=function(){S.biz=$('bz').value.trim();save();logAct('изменил название магазина');toast(T('🏪 Сохранено'))};
   [].forEach.call(document.querySelectorAll('[data-ap]'),function(b){b.onclick=function(){setSt(b.dataset.ap,'active')}});
   [].forEach.call(document.querySelectorAll('[data-bl]'),function(b){b.onclick=function(){setSt(b.dataset.bl,'blocked')}});
+  [].forEach.call(document.querySelectorAll('[data-rm]'),function(b){b.onclick=function(){delStaff(b.dataset.rm,b)}});
 }
 function dgt(){try{return JSON.parse(localStorage.getItem('skladgo.draft'))||{}}catch(e){return {}}}
 function gate(edit){
