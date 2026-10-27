@@ -478,8 +478,59 @@ function dstatsHtml(){
 function dstatsBind(){bindChips('dsm',function(v){dsMet=v;debt()});bindChips('dsp',function(v){dsPer=v;debt()});bindChips('dst',function(v){dsTop=v;debt()})}
 
 /* ---------- Статистика склада ---------- */
-function hseg(){return '<div class="seg2" id="hsg"><button data-v="ops" class="'+(hview==='ops'?'on':'')+'">🧾 Операции</button><button data-v="stats" class="'+(hview==='stats'?'on':'')+'">📊 Статистика</button></div>'}
+function hseg(){return '<div class="seg3" id="hsg"><button data-v="ops" class="'+(hview==='ops'?'on':'')+'">🧾 Операции</button><button data-v="stats" class="'+(hview==='stats'?'on':'')+'">📊 Статистика</button><button data-v="who" class="'+(hview==='who'?'on':'')+'">👥 Кто сколько</button></div>'}
 function bindSeg(){[].forEach.call(document.querySelectorAll('#hsg button'),function(b){b.onclick=function(){hview=b.dataset.v;hist()}})}
+/* ---------- Кто сколько ----------
+   В каждой продаже и в каждом долге записано, кто это сделал, — но увидеть
+   это было негде. Теперь видно: кто сколько продал, кто принял товар,
+   кто записал долги и когда работал в последний раз.
+
+   Владелец видит всех, сотрудник — только себя. Чужая выручка не его дело. */
+function whoStats(){
+  var now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59).getTime(),
+      start=end-wsPer*864e5+1,m={};
+  function чел(n){n=String(n||'—').trim()||'—';return m[n]||(m[n]={имя:n,продал:0,штук:0,принял:0,дал:0,вернули:0,пересчёт:0,дел:0,последний:0})}
+  S.log.forEach(function(l){
+    if(l.t<start||l.t>end)return;
+    var c=чел(l.by);c.дел++;if(l.t>c.последний)c.последний=l.t;
+    if(l.inv){c.пересчёт++;return}
+    if(l.type==='out'){c.продал+=l.sum||0;c.штук+=l.qty||0}
+    else if(l.type==='in'){c.принял+=l.qty||0}
+  });
+  (D.ops||[]).forEach(function(o){
+    var t=o.at||o.t;if(t<start||t>end)return;
+    var c=чел(o.by);c.дел++;if(t>c.последний)c.последний=t;
+    if(o.type==='give')c.дал+=o.amt||0;else c.вернули+=o.amt||0;
+  });
+
+  var L=Object.keys(m).map(function(k){return m[k]});
+  if(!isOwn&&ME)L=L.filter(function(c){return c.имя===ME.name});   // сотрудник видит только себя
+  L.sort(function(a,b){return b.продал-a.продал||b.дел-a.дел});
+
+  var h='<h1>История</h1>'+hseg()+chipsHtml('wsp',[[7,'7 дн.'],[30,'30 дн.'],[90,'90 дн.'],[365,'Год']],wsPer);
+  if(!L.length){
+    h+='<div class="empty">За этот срок никто ничего не делал</div>';
+  }else{
+    h+=L.map(function(c){
+      var д=c.последний?new Date(c.последний):null;
+      return '<div class="panel"><b style="font-size:17px">'+esc(c.имя)+'</b>'
+        +'<div class="stats" style="margin-top:8px"><div class="stat s3"><b class="o">'+money(c.продал)+'</b><small>продал · '+c.штук+' шт</small></div>'
+        +'<div class="stat s3"><b class="i">＋'+c.принял+'</b><small>принял, шт</small></div></div>'
+        +((c.дал||c.вернули)?'<div class="log"><div><b>'+'Долги'+'</b><small>'
+            +[c.дал?'записал в долг '+money(c.дал):'',c.вернули?'принял возврат '+money(c.вернули):''].filter(Boolean).join(' · ')
+            +'</small></div></div>':'')
+        +(c.пересчёт?'<div class="log"><div><b>'+'Пересчёт'+'</b><small>'+'исправил позиций: '+c.пересчёт+'</small></div></div>':'')
+        +'<small style="color:var(--mu);display:block;margin-top:6px">'+'всего действий: '+c.дел
+        +(д?' · последнее '+esc(dshort(c.последний))+' '+esc(('0'+д.getHours()).slice(-2)+':'+('0'+д.getMinutes()).slice(-2)):'')+'</small>'
+        +'</div>';
+    }).join('');
+  }
+  h+='<small style="color:var(--mu);display:block;margin-top:4px">Считается по тому, что хранится в истории — последние 400 записей.</small>';
+  $('app').innerHTML=h;
+  bindSeg();
+  bindChips('wsp',function(v){wsPer=v;whoStats()});
+}
+
 function wstats(){
   var now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59).getTime(),start=end-wsPer*864e5+1,step=wsPer>120?7*864e5:864e5,n=Math.ceil((end-start+1)/step),rev=[],qty=[],i;
   for(i=0;i<n;i++){rev.push(0);qty.push(0)}
@@ -514,6 +565,7 @@ function restItem(tid){
 var hp=0;
 function hist(){
   if(hview==='stats'){wstats();return}
+  if(hview==='who'){whoStats();return}
   var td=dkey(Date.now()),LG=S.log.filter(function(l){return hp===0||(hp===1?dkey(l.t)===td:Date.now()-l.t<hp*864e5)}),sold=0,rev=0,got=0,top={};
   LG.forEach(function(l){if(l.type==='in')got+=l.qty;else if(l.type==='out'){sold+=l.qty;rev+=l.sum||0;top[l.name]=(top[l.name]||0)+l.qty}});
   var tp=Object.keys(top).sort(function(a,b){return top[b]-top[a]}).slice(0,5);
