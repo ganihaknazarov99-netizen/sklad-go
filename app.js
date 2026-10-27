@@ -236,7 +236,7 @@ function stock(){
   var td=dkey(Date.now()),val=0,tot=0,inn=0,out=0,rev=0;
   S.items.forEach(function(i){val+=vOf(i);tot+=i.qty});
   S.log.forEach(function(l){if(dkey(l.t)===td){if(l.type==='in')inn+=l.qty;else if(l.type==='out'){out+=l.qty;rev+=l.sum||0}}});
-  var h='<h1>'+LOGO+'<small id="syi" style="display:inline;font-size:12px" title="Общий склад">'+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+'</b><small>стоимость склада · '+unitsTxt(S.items)+' · подробнее ›</small></div><div class="stat"><b>'+money(rev)+'</b><small>выручка сегодня</small></div><div class="stat"><b class="i">＋'+inn+'</b><small>привезли, шт</small></div><div class="stat"><b class="o">−'+out+'</b><small>продали, шт</small></div></div>';
+  var h='<h1>'+LOGO+'<small id="syi" style="display:inline;font-size:12px" title="Общий склад">'+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+'</b><small>стоимость склада · '+unitsTxt(S.items)+' · подробнее ›</small></div><div class="stat"><b>'+money(rev)+'</b><small>выручка сегодня</small></div><div class="stat"><b class="i">＋'+inn+'</b><small>привезли, шт</small></div><div class="stat"><b class="o">−'+out+'</b><small>продали, шт</small></div>'+allIn(val)+'</div>';
   h+='<input id="q" type="search" placeholder="Поиск: название, размер, цвет…" value="'+esc(q)+'">';
   h+='<div class="chips">'+['Все','⚠️ Мало','🗄 Архив'].concat(S.cats).map(function(c){return '<div class="chip'+(c===cat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</div>'}).join('')+'</div>';
   var L=S.items.filter(function(i){var arc=cat==='🗄 Архив';return(arc?!!i.ar:!i.ar)&&(cat==='Все'||arc||(cat==='⚠️ Мало'?i.qty<=3:i.cat===cat))&&lab(i).toLowerCase().indexOf(q.toLowerCase())>-1});
@@ -778,7 +778,10 @@ function pasteTel(sel,inp){
   try{navigator.clipboard.readText().then(function(t){t=String(t||'').trim();if(!t){hint();return}$(inp).value=t;smartPh(sel,inp);toast('📋 Номер вставлен')},hint)}catch(e){hint()}
 }
 function dpf(id){return D.people.filter(function(p){return p.id===id})[0]}
-function dbal(id){return D.ops.reduce(function(a,o){return o.pid===id?a+DT[o.type][1]*o.amt:a},0)}
+function dbal(id){
+  var b=Math.round((D.ops||[]).reduce(function(a,o){return o.pid===id?a+DT[o.type][1]*o.amt:a},0)*100)/100;
+  return b===0?0:b;   // иначе выходит «минус ноль» и на экране «−0 сомони»
+}
 function dlate(id){var b=dbal(id),td=lk(new Date()),m='';if(!b)return '';
   D.ops.forEach(function(o){if(o.pid===id&&o.due&&o.due<td&&((b>0&&o.type==='give')||(b<0&&o.type==='get'))&&(!m||o.due<m))m=o.due});return m}
 function dsave(){dpend=null;try{localStorage.setItem('skladgo.debts',JSON.stringify(D))}catch(e){}revDebts++;dirtyDebts=true;LSS('skladgo.dirty.debts','1');dpush()}
@@ -822,8 +825,24 @@ function dsnap(sn){
 }
 function dcopy(t,m){try{navigator.clipboard.writeText(t).then(function(){toast(m)},function(){showText(t)})}catch(e){showText(t)}}
 
+// Число без валюты: «сомони» уже сказано у большой суммы рядом.
+function nm(n){var r=Math.round((+n||0)*100)/100;if(r===0)r=0;return r.toLocaleString('ru-RU',{maximumFractionDigits:2})}
+// Деньги в долгах: сколько должны мне, сколько должен я. Архивных не считаем.
+function dnet(){
+  var pos=0,neg=0;(D.people||[]).forEach(function(p){if(p.arch)return;var b=dbal(p.id);if(b>0)pos+=b;else neg-=b});
+  return {pos:pos,neg:neg,net:pos-neg};
+}
+// Товар на складе плюс деньги в долгах — то число, которое хозяин каждый вечер
+// складывал в уме с двух разных экранов. Если долгов нет, складывать нечего.
+function allIn(val){
+  var n=dnet();if((!isOwn&&ME)||(!n.pos&&!n.neg))return '';   // сотруднику чужая касса не нужна
+  var все=Math.round((val+n.net)*100)/100;if(все===0)все=0;
+  return '<div class="stat w tot"><b>'+money(все)+'</b><small>всего у вас: товар '+nm(val)
+    +(n.net<0?' − ваши долги ':' + в долгах ')+nm(Math.abs(n.net))+'</small></div>';
+}
+
 function dpeopleHtml(){
-  var pos=0,neg=0;D.people.forEach(function(p){if(p.arch)return;var b=dbal(p.id);if(b>0)pos+=b;else neg-=b});var net=pos-neg;
+  var n=dnet(),pos=n.pos,neg=n.neg,net=n.net;
   var h='<div class="stats"><div class="stat"><b class="i">'+money(pos)+'</b><small>мне должны</small></div><div class="stat"><b class="o">'+money(neg)+'</b><small>я должен</small></div><div class="stat w"><b class="'+(net>=0?'i':'o')+'">'+sgn(net)+'</b><small>'+(net>0?'итого мне должны':net<0?'итого я должен':'всё рассчитано')+'</small></div></div>';
   h+='<input id="dq" type="search" placeholder="Поиск по имени…" value="'+esc(dq)+'"><div class="chips" id="dfc">'+[['all','Все'],['pos','Мне должны'],['neg','Я должен'],['arch','🗄 Архив']].map(function(c){return '<div class="chip'+(dflt===c[0]?' on':'')+'" data-f="'+c[0]+'">'+c[1]+'</div>'}).join('')+'</div>';
   var L=D.people.filter(function(p){var b=dbal(p.id);if(p.name.toLowerCase().indexOf(dq.toLowerCase())<0)return false;if(dflt==='arch')return !!p.arch;if(p.arch)return false;return dflt==='all'||(dflt==='pos'?b>0:b<0)});
