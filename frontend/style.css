@@ -79,6 +79,8 @@ input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:n
 .stat.w{grid-column:1/-1}
 .stat.tot b{font-size:25px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}
+.g3 button{padding:13px 4px;border-radius:12px;border:2px solid var(--bd);background:var(--card);font-weight:600}
 .g2 button{padding:13px 8px;border-radius:12px;border:2px solid var(--bd);background:var(--card);font-weight:600}
 .amt{text-align:right;font-size:18px;font-weight:700}.amt small{font-weight:400}
 .late{color:var(--out)!important}

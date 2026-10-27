@@ -124,7 +124,14 @@
     connectStream();
     var s = document.createElement('script'); s.src = 'app.js'; document.body.appendChild(s);
   }
-  function screen(h) { $('auth').style.display = 'block'; $('auth').innerHTML = '<div class="authbox"><div style="text-align:right;margin-bottom:-6px"><button class="link" id="lgs">' + (window.SKLAD_LANG === 'tg' ? T('Русский') : T('Тоҷикӣ')) + '</button></div><div class="brand"><img src="logo.svg" alt="Sklad Go"></div>' + h + '</div>'; $('lgs').onclick = function () { setLang(window.SKLAD_LANG === 'tg' ? 'ru' : 'tg'); }; $('app').style.display = 'none'; $('fab').style.display = 'none'; $('nav').innerHTML = ''; }
+  // Названия языков пишутся на них самих. Свой язык не показываем — он уже включён.
+  function langBtns() {
+    return [['ru', 'Русский'], ['tg', 'Тоҷикӣ'], ['en', 'English']]
+      .filter(function (l) { return l[0] !== window.SKLAD_LANG; })
+      .map(function (l) { return '<button class="link" data-lg="' + l[0] + '">' + l[1] + '</button>'; })
+      .join(' · ');
+  }
+  function screen(h) { $('auth').style.display = 'block'; $('auth').innerHTML = '<div class="authbox"><div style="text-align:right;margin-bottom:-6px">' + langBtns() + '</div><div class="brand"><img src="logo.svg" alt="Sklad Go"></div>' + h + '</div>'; [].forEach.call($('auth').querySelectorAll('[data-lg]'), function (b) { b.onclick = function () { setLang(b.getAttribute('data-lg')); }; }); $('app').style.display = 'none'; $('fab').style.display = 'none'; $('nav').innerHTML = ''; }
   function busy(btn, on) { btn.disabled = on; btn.style.opacity = on ? '.6' : ''; }
   function showErr(e) { var el = $('aerr'); if (el) el.textContent = (e && e.message) || T('Ошибка'); }
   function field(id, label, type, ph, extra) { return '<label for="' + id + '">' + label + '</label><input id="' + id + '" type="' + type + '" placeholder="' + esc(ph || '') + '" ' + (extra || '') + '>'; }

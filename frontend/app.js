@@ -138,8 +138,10 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function find(id){return S.items.filter(function(i){return i.id===id})[0]}
 function meta(i){return [i.cat,i.size,i.color].filter(Boolean).map(esc).join(' · ')}
 function lab(i){return i.name+(i.size?' · '+i.size:'')+(i.color?' · '+i.color:'')}
-var CURS={TJS:['сомони','сомонӣ'],UZS:['сум','сўм'],KZT:['тенге','тенге'],KGS:['сом','сом'],RUB:['руб.','рубл'],USD:['$','доллар']};
-function CL(){var c=CURS[S.cur]||CURS.TJS;return c[window.SKLAD_LANG==='tg'?1:0]}
+var ЯЗЫКИ=[['ru','Русский'],['tg','Тоҷикӣ'],['en','English']];
+var CURS={TJS:['сомони','сомонӣ','somoni'],UZS:['сум','сўм','sum'],KZT:['тенге','тенге','tenge'],KGS:['сом','сом','som'],RUB:['руб.','рубл','rub.'],USD:['$','доллар','$']};
+var ЯЗN={ru:0,tg:1,en:2};   // какая колонка словаря валют нужна этому языку
+function CL(){var c=CURS[S.cur]||CURS.TJS;return c[ЯЗN[window.SKLAD_LANG]||0]}
 function money(n){
   var r=Math.round((+n||0)*100)/100;
   if(r===0)r=0;   // иначе выходит «−0 сомони»: минус там, где всё сошлось
@@ -196,7 +198,7 @@ function pf(i){return (i.price||0)*((uOf(i)==='пачка'&&i.pb!=='pack')?pcs(i
 function vOf(i){return pf(i)*i.qty}
 function pTxt(i){return money(i.price)+(uOf(i)==='пачка'?(i.pb==='pack'?T('/пачка'):T('/шт')):'')}
 function needPk(i){return uOf(i)==='пачка'&&i.pb!=='pack'&&!(i.pk&&i.pk[0]>0)}
-function priceHint(u,pb){return T('Цена, ')+CL()+T(' (за 1 ')+(u!=='пачка'?T('шт'):pb==='pack'?T('пачку'):T('штуку'))+')'}
+function priceHint(u,pb){return T('Цена, ')+CL()+(u!=='пачка'?T(' (за 1 шт'):T(' (за 1 ')+(pb==='pack'?T('пачку'):T('штуку')))+')'}
 function unitBlock(px,u,pk,pb){return T('<div class="lbl">Единица учёта</div><div class="wrap" id="')+px+'uw"><div class="chip'+(u!=='пачка'?' on':'')+T('" data-u="шт">шт</div><div class="chip')+(u==='пачка'?' on':'')+T('" data-u="пачка">пачка</div></div><div id="')+px+'pb" style="display:'+(u==='пачка'?'block':'none')+T('"><div class="lbl">Штук в пачке — от и до (можно заполнить позже)</div><div class="row"><input id="')+px+T('k1" type="number" inputmode="numeric" placeholder="от, напр. 4" value="')+((pk&&pk[0])||'')+'"><input id="'+px+T('k2" type="number" inputmode="numeric" placeholder="до, напр. 5" value="')+((pk&&pk[1])||'')+T('"></div><div class="lbl">Цена указана за</div><div class="wrap" id="')+px+'bw"><div class="chip'+(pb!=='pack'?' on':'')+T('" data-b="piece">1 штуку</div><div class="chip')+(pb==='pack'?' on':'')+T('" data-b="pack">1 пачку</div></div></div>')}
 function bindUnit(px,fn){
   [].forEach.call(document.querySelectorAll('#'+px+'uw .chip'),function(c){c.onclick=function(){[].forEach.call(document.querySelectorAll('#'+px+'uw .chip'),function(x){x.classList.toggle('on',x===c)});$(px+'pb').style.display=c.dataset.u==='пачка'?'block':'none';if(fn)fn()}});
@@ -1429,7 +1431,7 @@ function botTools(m){
   {name:'clients_today',description:T('Клиенты, у которых сегодня была запись о долге: имя, есть ли телефон, остаток долга и сегодняшние записи.'),inputSchema:{type:'object',properties:{}},
    execute:function(){var td=dkey(Date.now());return D.people.filter(function(x){return D.ops.some(function(o){return o.pid===x.id&&dkey(o.t)===td})}).map(function(x){return {name:x.name,has_phone:!!x.phone,balance_som:dbal(x.id),today:dtoday(x)}})}},
   {name:'propose_message',description:'Предложить сообщение клиенту по долгам: SMS (channel=sms) или WhatsApp Business (wa). Текст можно не передавать: программа сама напишет, что клиент взял сегодня и какой остаток долга. Только предлагает: пользователь подтвердит и сам нажмёт «Отправить».',inputSchema:{type:'object',properties:{name:{type:'string'},channel:{type:'string',enum:['sms','wa']},text:{type:'string'}},required:['name']},
-   execute:function(i){var nm=String(i.name||'').trim().toLowerCase(),x=D.people.filter(function(y){return y.name.toLowerCase()===nm})[0];if(!x)throw new Error(T('Такого человека нет в долгах'));if(!x.phone)throw new Error(T('У ')+x.name+T(' не указан телефон'));var t=String(i.text||'').trim()||dmsg(x,dbal(x.id));m.props.push({id:uid(),k:'msg',ch:i.channel==='wa'?'wa':'sms',name:x.name,phone:x.phone,text:t});return {status:T('ожидает подтверждения пользователя'),name:x.name}}},
+   execute:function(i){var nm=String(i.name||'').trim().toLowerCase(),x=D.people.filter(function(y){return y.name.toLowerCase()===nm})[0];if(!x)throw new Error(T('Такого человека нет в долгах'));if(!x.phone)throw new Error(T('Не указан телефон у ')+x.name);var t=String(i.text||'').trim()||dmsg(x,dbal(x.id));m.props.push({id:uid(),k:'msg',ch:i.channel==='wa'?'wa':'sms',name:x.name,phone:x.phone,text:t});return {status:T('ожидает подтверждения пользователя'),name:x.name}}},
   {name:'propose_stock_operation',description:T('Предложить приход (in) или расход/продажу (out) товара. Только предлагает: пользователь подтвердит кнопкой. item_id бери из find_items.'),inputSchema:{type:'object',properties:{item_id:{type:'string'},type:{type:'string',enum:['in','out']},qty:{type:'number'}},required:['item_id','type','qty']},
    execute:function(i){var it=find(i.item_id);if(!it)throw new Error(T('Товар не найден, сначала вызови find_items'));var n=Math.floor(+i.qty),ty=i.type==='out'?'out':'in';if(!(n>0))throw new Error(T('Некорректное количество'));if(ty==='out'&&n>it.qty)throw new Error(T('На складе только ')+it.qty+T(' шт'));m.props.push({id:uid(),k:'stock',item:it.id,ty:ty,n:n});return {status:T('ожидает подтверждения пользователя'),item:lab(it),type:ty,qty:n}}},
   {name:'propose_debt',description:T('Предложить запись о долге: give — я дал в долг, get — я получил (в долг или возврат). Только предлагает: пользователь подтвердит кнопкой.'),inputSchema:{type:'object',properties:{name:{type:'string'},type:{type:'string',enum:['give','get']},amount:{type:'number'}},required:['name','type','amount']},
@@ -1478,7 +1480,7 @@ function wait(st){
 }
 var feedKeys=null;
 function feedT(t){
-  if(window.SKLAD_LANG!=='tg'||!t)return t;var D=window.SKLAD_TG||{};
+  if(window.SKLAD_LANG==='ru'||!t)return t;var D=window.SKLAD_DICT||{};
   if(!feedKeys)feedKeys=Object.keys(D).filter(function(k){return k.length<42}).sort(function(a,b){return b.length-a.length});
   var out=t;for(var i=0;i<feedKeys.length;i++){var k=feedKeys[i];if(t.indexOf(k)===0){out=D[k]+t.slice(k.length);break}}
   return out.replace(/\((\d+) поз\.\)/,'($1 '+(D['поз']||'поз')+'.)').replace(/ шт\b/g,' '+(D['шт']||'шт'));
@@ -1657,8 +1659,10 @@ function team(){
   var h=devAlert()+T('<h1>Команда</h1><div class="card"><div class="info"><b>')+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?T('Владелец · '):T('Сотрудник · '))+esc(ME.phone)+' · '+esc(ME.mail)+T('</small></div><button class="link" id="me">Изменить</button></div>');
   if(window.skladAuth)h+=T('<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>')+(isOwn?'':T('<button class="link del" id="da">🗑 Удалить мой аккаунт</button>'))+'</div>';
   h+=T('<div class="lbl">🎨 Вид</div>')+chipsHtml('th',[['light',T('Светлый')],['dark',T('Тёмный')],['auto',T('Как на телефоне')]],window.SkladTheme?window.SkladTheme.get():'light')+'<div style="height:12px"></div>';
-  h+=T('<div class="lbl">🌐 Язык / Забон</div><div class="g2" id="lg" style="margin:4px 0 12px"><button data-lg="ru" style="')+(window.SKLAD_LANG==='ru'?'border-color:var(--ac);color:var(--ac)':'')+T('">Русский</button><button data-lg="tg" style="')+(window.SKLAD_LANG==='tg'?'border-color:var(--ac);color:var(--ac)':'')+T('">Тоҷикӣ</button></div>');
-  if(isOwn)h+=T('<div class="lbl">💱 Валюта магазина</div><select id="cu">')+Object.keys(CURS).map(function(k){return '<option value="'+k+'"'+((S.cur||'TJS')===k?' selected':'')+'>'+CURS[k][window.SKLAD_LANG==='tg'?1:0]+'</option>'}).join('')+'</select>';
+  h+=T('<div class="lbl">🌐 Язык / Забон</div>')+'<div class="g3" id="lg" style="margin:4px 0 12px">'+ЯЗЫКИ.map(function(я){
+    return '<button data-lg="'+я[0]+'" style="'+(window.SKLAD_LANG===я[0]?'border-color:var(--ac);color:var(--ac)':'')+'">'+я[1]+'</button>';
+  }).join('')+'</div>';
+  if(isOwn)h+=T('<div class="lbl">💱 Валюта магазина</div><select id="cu">')+Object.keys(CURS).map(function(k){return '<option value="'+k+'"'+((S.cur||'TJS')===k?' selected':'')+'>'+CURS[k][ЯЗN[window.SKLAD_LANG]||0]+'</option>'}).join('')+'</select>';
   h+=twoFaPanel();
   h+=secPanel();
   if(isOwn){
@@ -1669,7 +1673,7 @@ function team(){
       : T('<div class="empty">Загружаю…</div>');
     h+='</div>';
   }
-  if(isOwn)h+=T('<div class="lbl">🏪 Название магазина (подпись в сообщениях)</div><div class="row"><input id="bz" placeholder="Напр. Магазин Ганӣ" value="')+esc(S.biz||'')+T('"><button class="go ac" id="bzs" style="padding:10px;font-size:15px;margin-bottom:8px">Сохранить</button></div>');
+  if(isOwn)h+=T('<div class="lbl">🏪 Название магазина (подпись в сообщениях)</div><div class="row"><input id="bz" placeholder="Напр. Магазин Гани" value="')+esc(S.biz||'')+T('"><button class="go ac" id="bzs" style="padding:10px;font-size:15px;margin-bottom:8px">Сохранить</button></div>');
   var pd=staff.filter(function(x){return x.status==='pending'}),ac=staff.filter(function(x){return x.status!=='pending'});
   if(isOwn&&pd.length)h+=T('<div class="lbl">Ждут подтверждения (')+pd.length+')</div>'+pd.map(function(x){return '<div class="card"><div class="info"><b>'+esc(x.name)+'</b><small>'+esc(x.phone)+' · '+esc(x.mail)+'</small></div><button class="link" data-ap="'+x._id+T('">✓ Разрешить</button><button class="link del" data-bl="')+x._id+'">✕</button></div>'}).join('');
   h+=T('<div class="lbl">Сотрудники склада (')+ac.length+')</div>';
