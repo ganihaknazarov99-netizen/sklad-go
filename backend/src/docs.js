@@ -254,9 +254,28 @@ function makeDocs(ctx) {
     broadcast(col, path, u.shop_id);
     return { ok: true, version };
   }
+  /* Убрать человека из магазина совсем. Блокировка только закрывает вход,
+     а уволенный остаётся в списке навсегда — через год там будет толпа тех,
+     кто давно не работает.
+
+     Вместе с человеком уходят его входы, устройства и запасные коды. А вот
+     его имя в истории продаж и в ленте остаётся: что было, то было, и
+     переписывать прошлое мы не станем. */
+  function staffDelete(viewer, id) {
+    if (viewer.role !== 'owner') throw new HttpError(403, 'forbidden');
+    const target = auth.byId(id);
+    if (!target || target.shop_id !== viewer.shop_id) throw new HttpError(404, 'not_found');
+    if (target.role === 'owner') throw new HttpError(409, 'owner_cannot_delete');
+    db.prepare('DELETE FROM users WHERE id=?').run(id);   // сессии, устройства и коды уходят следом
+    auth.audit(viewer.id, 'staff_delete', target.email);
+    broadcast('staff', 'staff/' + id, viewer.shop_id);
+    return { ok: true };
+  }
+
   function deleteDoc(u, path) {
     const { col, id } = parsePath(path);
-    if (col === 'staff' || col === 'meta') throw new HttpError(403, 'forbidden');
+    if (col === 'staff') return staffDelete(u, id);
+    if (col === 'meta') throw new HttpError(403, 'forbidden');
     check(u, col, id, 'delete');
     db.prepare('DELETE FROM docs WHERE path=?').run(store(u, path));
     broadcast(col, path, u.shop_id);
