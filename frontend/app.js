@@ -1158,7 +1158,7 @@ function dcopy(t,m){try{navigator.clipboard.writeText(t).then(function(){toast(m
 
 function dpeopleHtml(){
   var pos=0,neg=0;D.people.forEach(function(p){if(p.arch)return;var b=dbal(p.id);if(b>0)pos+=b;else neg-=b});var net=pos-neg;
-  var h='<div class="stats"><div class="stat"><b class="i">'+money(pos)+T('</b><small>мне должны</small></div><div class="stat"><b class="o">')+money(neg)+T('</b><small>я должен</small></div><div class="stat w"><b class="')+(net>=0?'i':'o')+'">'+sgn(net)+T('</b><small>общее сальдо</small></div></div>');
+  var h='<div class="stats"><div class="stat"><b class="i">'+money(pos)+T('</b><small>мне должны</small></div><div class="stat"><b class="o">')+money(neg)+T('</b><small>я должен</small></div><div class="stat w"><b class="')+(net>=0?'i':'o')+'">'+sgn(net)+'</b><small>'+T(net>0?'итого мне должны':net<0?'итого я должен':'всё рассчитано')+'</small></div></div>';
   h+=T('<input id="dq" type="search" placeholder="Поиск по имени…" value="')+esc(dq)+'"><div class="chips" id="dfc">'+[['all','Все'],['pos','Мне должны'],['neg','Я должен'],['arch','🗄 Архив']].map(function(c){return '<div class="chip'+(dflt===c[0]?' on':'')+'" data-f="'+c[0]+'">'+c[1]+'</div>'}).join('')+'</div>';
   var L=D.people.filter(function(p){var b=dbal(p.id);if(p.name.toLowerCase().indexOf(dq.toLowerCase())<0)return false;if(dflt==='arch')return !!p.arch;if(p.arch)return false;return dflt==='all'||(dflt==='pos'?b>0:b<0)});
   L.sort(function(a,b){return Math.abs(dbal(b.id))-Math.abs(dbal(a.id))});
