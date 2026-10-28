@@ -1,7 +1,7 @@
 /* Sklad Go: оболочка программы хранится на телефоне — открывается без интернета.
    Данные (/api/*) сюда не попадают: они хранятся в самой программе и синхронизируются отдельно. */
-const V = 'skladgo-shell-v6';   // номер меняем всякий раз, когда меняется список ниже
-const SHELL = ['/', '/index.html', '/style.css', '/theme.js', '/config.js', '/merge.js', '/barcode.js', '/qr.js', '/scan.js', '/i18n.js', '/tg.js', '/auth.js', '/app.js', '/logo.svg', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
+const V = 'skladgo-shell-v7';   // номер меняем всякий раз, когда меняется список ниже
+const SHELL = ['/', '/index.html', '/style.css', '/theme.js', '/config.js', '/merge.js', '/barcode.js', '/qr.js', '/scan.js', '/i18n.js', '/tg.js', '/en.js', '/auth.js', '/app.js', '/logo.svg', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(V).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

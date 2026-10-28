@@ -1,15 +1,21 @@
-/* Язык интерфейса: ru (русский) или tg (тоҷикӣ). Словарь переводов — в файле tg.js (его легко править).
-   Деньги и склад не затрагиваются: переводится только то, что показывается на экране. */
+/* Язык интерфейса: ru (русский), tg (тоҷикӣ) или en (English). Словари переводов — в файлах
+   tg.js и en.js (их легко править): слева русская надпись из программы, справа перевод.
+   Деньги и склад не затрагиваются: переводится только то, что показывается на экране.
+
+   Английский нарочно не включается сам по языку телефона: в наших краях у многих телефон
+   стоит на английском, а программу человек хочет по-русски. Английский выбирают кнопкой. */
 (function () {
   'use strict';
+  var ЯЗЫКИ = { ru: 1, tg: 1, en: 1 };
   var L = 'ru';
   try {
     L = localStorage.getItem('skladgo.lang') || ((navigator.language || '').toLowerCase().indexOf('tg') === 0 ? 'tg' : 'ru');
   } catch (e) {}
-  if (L !== 'tg') L = 'ru';
+  if (!ЯЗЫКИ[L]) L = 'ru';
   window.SKLAD_LANG = L;
   document.documentElement.lang = L;
-  var D = window.SKLAD_TG || {};
+  var D = window['SKLAD_' + L.toUpperCase()] || {};
+  window.SKLAD_DICT = D;
   var CY = /[А-Яа-яЁё]/;
   var CORE = /^([\s\S]*?)([А-Яа-яЁё][\s\S]*[А-Яа-яЁё]|[А-Яа-яЁё])([\s\S]*)$/;
   var missing = {};
@@ -28,17 +34,17 @@
     return tag.replace(/(placeholder|title|aria-label|alt)="([^"]*)"/g, function (a, k, v) { return k + '="' + tx(v) + '"'; });
   }
   window.T = function (s) {
-    if (L !== 'tg' || typeof s !== 'string') return s;
+    if (L === 'ru' || typeof s !== 'string') return s;
     if (s.indexOf('<') < 0 && s.indexOf('>') < 0) return tx(s);
     return s.split(/(<[^>]*>)/).map(function (p, i) { return i % 2 ? attrs(p) : tx(p); }).join('');
   };
   window.setLang = function (l) {
-    try { localStorage.setItem('skladgo.lang', l === 'tg' ? 'tg' : 'ru'); } catch (e) {}
+    try { localStorage.setItem('skladgo.lang', ЯЗЫКИ[l] ? l : 'ru'); } catch (e) {}
     location.reload();
   };
 
   // Запасной вариант для надписей из данных (названия категорий, цвета, «Все»…): переводим только если весь текст совпал со словарём
-  if (L === 'tg') {
+  if (L !== 'ru') {
     var SKIP = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, svg: 1, SVG: 1 };
     var conv = function (n) {
       if (n.nodeType === 3) {
@@ -57,8 +63,8 @@
     };
     if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
   }
-  // Месяцы и даты на таджикском, если телефон их знает; иначе русские
-  var LOC = 'ru-RU';
+  // Месяцы и даты на языке программы, если телефон их знает; иначе русские
+  var LOC = L === 'en' ? 'en-GB' : 'ru-RU';
   try { if (L === 'tg' && Intl.DateTimeFormat.supportedLocalesOf(['tg-TJ']).length) LOC = 'tg-TJ'; } catch (e) {}
   window.SKLAD_LOC = LOC;
 })();
