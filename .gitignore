@@ -12,6 +12,10 @@ backend/.env
 TEST-OWNER.txt
 backend/TEST-OWNER.txt
 
+# Рабочие копии Claude Code — это целые копии склада, им в складе не место.
+# А вот .claude/agents и .claude/skills нужны: это общие настройки работы.
+.claude/worktrees/
+
 # Мусор редакторов и систем
 *.bak
 node_modules/
