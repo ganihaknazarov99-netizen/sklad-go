@@ -23,7 +23,16 @@ function makeConfig(o = {}) {
     mailMode: pick('mailMode', e.MAIL_MODE || 'console'),
     mailUrl: pick('mailUrl', e.MAIL_WEBHOOK_URL || ''),
     mailKey: pick('mailKey', e.MAIL_API_KEY || ''),
-    mailFrom: pick('mailFrom', e.MAIL_FROM || 'Sklad Go <no-reply@localhost>'),
+    smtpHost: pick('smtpHost', e.SMTP_HOST || ''),
+    smtpPort: +pick('smtpPort', e.SMTP_PORT || 587),
+    smtpUser: pick('smtpUser', e.SMTP_USER || ''),
+    smtpPass: pick('smtpPass', e.SMTP_PASS || ''),
+    // Обычно порт сам говорит: 465 — шифрование сразу, 587 — после STARTTLS
+    smtpSecure: pick('smtpSecure', e.SMTP_SECURE === undefined ? undefined : e.SMTP_SECURE === 'true'),
+    // Нужен только тем, у кого почтовый сервер свой, с собственным сертификатом
+    smtpCa: pick('smtpCa', e.SMTP_CA_FILE ? fs.readFileSync(e.SMTP_CA_FILE) : ''),
+    // Обратный адрес по умолчанию — сам почтовый ящик: Gmail всё равно подставит его
+    mailFrom: pick('mailFrom', e.MAIL_FROM || (e.SMTP_USER ? 'Sklad Go <' + e.SMTP_USER + '>' : 'Sklad Go <no-reply@localhost>')),
     ownerEmail: String(pick('ownerEmail', e.OWNER_EMAIL || '')).trim().toLowerCase(),
     corsOrigin: pick('corsOrigin', e.CORS_ORIGIN || ''),
     sessionDays: +pick('sessionDays', e.SESSION_DAYS || 30),

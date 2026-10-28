@@ -142,6 +142,15 @@ function checkSafety(cfg) {
   const warn = [];
   if (cfg.devMailbox) warn.push('DEV_MAILBOX=true — коды из писем видны по ссылке /api/dev/mailbox. Для рабочего сервера поставьте false.');
   if (!cfg.ownerEmail) warn.push('OWNER_EMAIL не задан — любой человек с адресом сервера заведёт себе магазин. Так и задумано для общего сервера; для своего укажите свою почту.');
+  // Самая обидная поломка на новом сервере: подтверждение почты включено, а письма
+  // печатаются в лог. Человек регистрируется, ждёт код — и не дожидается никогда.
+  const писемНет = cfg.mailMode === 'console' || cfg.mailMode === 'memory';
+  if (писемНет && cfg.requireVerify) {
+    warn.push('письма никуда не уходят (MAIL_MODE=' + cfg.mailMode + '), а подтверждение почты включено — НИКТО не сможет зарегистрироваться, включая вас. Настройте MAIL_MODE=smtp или поставьте REQUIRE_VERIFY=false.');
+  } else if (писемНет) {
+    warn.push('письма никуда не уходят (MAIL_MODE=' + cfg.mailMode + ') — кнопка «Забыли пароль?» сделает вид, что отправила код, но он не придёт. Пароль пока сбрасывайте с сервера: node scripts/admin.js password почта@пример');
+  }
+  if (cfg.mailMode === 'smtp' && !cfg.smtpHost) warn.push('MAIL_MODE=smtp, но SMTP_HOST не задан — письма отправляться не будут.');
   if (cfg.sessionDays > 90) warn.push('SESSION_DAYS=' + cfg.sessionDays + ' — вход не кончается больше трёх месяцев.');
   for (const w of warn) console.log('ВНИМАНИЕ: ' + w);
 }
@@ -152,7 +161,7 @@ if (require.main === module) {
   const app = createApp();
   app.listen().then((port) => {
     console.log(`Sklad Go запущен: http://localhost:${port}`);
-    console.log(`База: ${app.cfg.dbPath} | почта: ${app.cfg.mailMode} | подтверждение почты: ${app.cfg.requireVerify ? 'включено' : 'выключено'}`);
+    console.log(`База: ${app.cfg.dbPath} | почта: ${app.cfg.mailMode === 'smtp' ? 'smtp ' + app.cfg.smtpHost + ':' + app.cfg.smtpPort : app.cfg.mailMode} | подтверждение почты: ${app.cfg.requireVerify ? 'включено' : 'выключено'}`);
   });
   const stop = () => app.close().then(() => process.exit(0));
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
