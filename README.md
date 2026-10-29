@@ -42,8 +42,15 @@
    из [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
    В Google Cloud в «Authorized redirect URIs» добавьте адрес, который показывает Supabase:
    `https://<ваш-проект>.supabase.co/auth/v1/callback`.
-4. **Authentication → URL Configuration** → Site URL и Redirect URLs:
-   `https://ganihaknazarov99-netizen.github.io/sklad-go/`
+4. **Authentication → URL Configuration**:
+   - **Site URL**: `https://skladgo.vercel.app`
+   - **Redirect URLs** — все адреса, по которым программа открыта, иначе вход
+     с них не вернётся обратно:
+     ```
+     https://skladgo.vercel.app
+     https://sklad-go-gani26.vercel.app
+     https://ganihaknazarov99-netizen.github.io/sklad-go/
+     ```
 5. **Project Settings → API** → скопируйте Project URL и ключ `anon public` в `config.js`.
    Этот ключ открытый: что можно делать с данными, решают правила из `schema.sql`.
 6. Закоммитьте и запушьте — через минуту сайт заработает с сервером.
