@@ -232,10 +232,12 @@ create policy staff_update on public.staff for update using (uid = auth.uid() or
 create policy activity_read  on public.activity for select using (public.is_active());
 create policy activity_write on public.activity for insert with check (public.is_active());
 
-revoke all on function public.delete_my_account() from public;
+-- Supabase сам выдаёт anon и authenticated право вызывать любую функцию в public,
+-- поэтому «from public» здесь мало: отбираем у этих ролей поимённо.
+revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
 grant execute on function public.doc_set(text, jsonb, bigint) to authenticated;
-revoke all on function public.may_claim_owner(uuid) from public;
+revoke all on function public.may_claim_owner(uuid) from public, anon, authenticated;
 
 -- ---------- Живые обновления ----------
 -- Без этого изменения с другого телефона не приедут сами.

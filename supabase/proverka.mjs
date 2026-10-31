@@ -40,6 +40,11 @@ await db.exec(`
   create function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema public, auth to anon, authenticated;
+  -- Supabase сам выдаёт anon и authenticated право вызывать любую новую функцию
+  -- в public. Поэтому «revoke ... from public» там ничего не закрывает — надо
+  -- отбирать у этих ролей поимённо. Без этой строки проверка была бы мягче
+  -- настоящего Supabase и пропускала бы такие ошибки.
+  alter default privileges in schema public grant execute on functions to anon, authenticated;
 `);
 let безРеалтайма = false;
 try { await db.exec('create publication supabase_realtime'); } catch (e) { безРеалтайма = true; }
