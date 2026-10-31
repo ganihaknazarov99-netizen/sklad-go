@@ -1,0 +1,12 @@
+{
+  "name": "sklad-go-supabase-rules",
+  "private": true,
+  "description": "Проверка правил доступа Supabase на настоящем Postgres (PGlite). Только для проверки: в саму программу и на витрину не попадает.",
+  "type": "module",
+  "scripts": {
+    "test": "node proverka.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.2.17"
+  }
+}
