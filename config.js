@@ -19,7 +19,10 @@
    хозяином станет первый, кто прочтёт этот файл. */
 (function () {
   var МАГАЗИН = {
-    // 'skladgo.vercel.app': { url: 'https://xxxx.supabase.co', anonKey: 'sb_publishable_…' }
+    'skladgo.vercel.app': {
+      url: 'https://qjymwgulpcxyuuphsfrx.supabase.co',
+      anonKey: 'sb_publishable_jGtHY6ADsb02PqQs9SeI8g_KPvyz7EP'
+    }
   };
   window.SKLAD_CONFIG = МАГАЗИН[location.hostname] || { url: '', anonKey: '' };
 })();
