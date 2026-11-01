@@ -114,7 +114,10 @@ console.log('\n9. Склад видят только свои');
 await как(ПРОДАВЕЦ, "select public.doc_set('main', '{\"items\":[]}'::jsonb, null)");
 да((await как(ПРОДАВЕЦ, 'select id from public.docs')).rows.length === 1, 'продавец видит склад');
 да((await как(ВОР, 'select id from public.docs')).rows.length === 0, 'вор в очереди склада не видит');
-да((await как(null, 'select id from public.docs')).rows.length === 0, 'без входа склада не видно');
+// Без входа база не отвечает «пусто», а отказывает прямо: пустой ответ программа
+// с истёкшим входом могла бы принять за пустой склад.
+ош = await какОшибка(null, 'select id from public.docs');
+да(ош && /permission denied/.test(ош), 'без входа склада не видно — база отказывает: ' + (ош || 'ответила'));
 да(!!(await какОшибка(ВОР, "select public.doc_set('main', '{}'::jsonb, null)")), 'вор в очереди склад не перепишет');
 
 console.log('\n10. Продавец подделывает ленту');
@@ -287,12 +290,24 @@ const почта = (await db.query("select value from public.settings where key 
 да(почта === ПОЧТА_ХОЗЯИНА, 'вор не переписал почту хозяина на свою' + (ош ? '' : ' (запрос прошёл, но ничего не изменил)'));
 да(!!(await какОшибка(ВОР, "select public.may_claim_owner($1::uuid)", [ВОР])), 'проверку «могу ли я стать хозяином» снаружи не вызвать');
 
-console.log('\n21. Новенький в очереди уходит сам');
+console.log('\n21. Служебные функции снаружи не вызвать');
+да(!!(await какОшибка(null, 'select public.is_owner()')), 'без входа «хозяин ли я» не спросить');
+да(!!(await какОшибка(null, "select public.doc_set('main', '{}'::jsonb, null)")), 'без входа склад не записать');
+да((await как(ХОЗЯИН, 'select public.is_owner() as да')).rows[0].да === true, 'вошедший хозяин спрашивает и получает ответ');
+const права = (await db.query(`select
+  has_function_privilege('authenticated', 'public.docs_guard()', 'execute')     as docs,
+  has_function_privilege('authenticated', 'public.staff_guard()', 'execute')    as staff,
+  has_function_privilege('authenticated', 'public.activity_guard()', 'execute') as activity,
+  has_function_privilege('anon', 'public.is_active()', 'execute')               as anon_active`)).rows[0];
+да(!права.docs && !права.staff && !права.activity, 'охранников руками не вызвать — а срабатывают они всё равно (все разделы выше)');
+да(!права.anon_active, '«подтверждён ли я» без входа не вызвать');
+
+console.log('\n22. Новенький в очереди уходит сам');
 ош = await какОшибка(ВОР, 'select public.delete_my_account()');
 да(!ош, 'ожидающий может удалить свой аккаунт' + (ош ? ': ' + ош : ''));
 да(!(await строка(ВОР)), 'и его строки больше нет');
 
-console.log('\n22. Схему можно запустить повторно');
+console.log('\n23. Схему можно запустить повторно');
 ош = null;
 try { await db.exec(схема); } catch (e) { ош = e.message; }
 да(!ош, 'повторный запуск прошёл без ошибок' + (ош ? ': ' + ош : ''));

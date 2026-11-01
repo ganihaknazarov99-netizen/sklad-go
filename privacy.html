@@ -1,0 +1,132 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Конфиденциальность — Sklad Go</title>
+<script src="theme.js"></script>
+<!-- Политика конфиденциальности. Без неё Google не открывает вход для всех:
+     пока её нет, войти могут только люди из списка, вписанные вручную. -->
+<style>
+:root{--bg:#f2f5f7;--card:#fff;--tx:#10161d;--mu:#6b7683;--ac:#0d9488;--bd:#e1e6eb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0f13;--card:#151b21;--tx:#eef2f5;--mu:#93a0ad;--ac:#2dd4bf;--bd:#252e38}}
+:root[data-theme="light"]{color-scheme:light}:root[data-theme="dark"]{color-scheme:dark}
+:root[data-theme="dark"]{--bg:#0b0f13;--card:#151b21;--tx:#eef2f5;--mu:#93a0ad;--ac:#2dd4bf;--bd:#252e38}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:680px;margin:0 auto;padding:20px 16px 48px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}.brand img{width:40px;height:40px}
+.brand b{font-size:20px}.brand b span{color:var(--ac)}
+nav{display:flex;gap:8px;margin:12px 0 20px}
+nav a{padding:6px 14px;border-radius:99px;border:1px solid var(--bd);background:var(--card);color:var(--tx);text-decoration:none}
+section{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:4px 18px 14px;margin-bottom:16px}
+h1{font-size:24px;margin:16px 0 4px}h2{font-size:17px;margin:18px 0 6px}
+p,li{margin:6px 0}ul{padding-left:20px}
+small{color:var(--mu)}a{color:var(--ac)}
+</style>
+</head><body><main>
+<div class="brand"><img src="logo.svg" alt=""><b>Sklad <span>Go</span></b></div>
+<nav><a href="#ru" lang="ru">Русский</a><a href="#en" lang="en">English</a></nav>
+
+<section id="ru" lang="ru">
+<h1>Конфиденциальность</h1>
+<small>Действует с 2 ноября 2026 года</small>
+
+<p>Sklad Go — учёт склада и долгов для маленького магазина. Программой пользуется
+хозяин магазина и сотрудники, которых он пустил. Здесь написано, какие данные
+программа хранит, кто их видит и как их удалить.</p>
+
+<h2>Что хранится</h2>
+<ul>
+<li><b>Вход через Google.</b> Программа получает от Google только ваши имя, адрес
+почты и ссылку на фото профиля. Пароль от Google ей не виден и не нужен.</li>
+<li><b>Данные сотрудника</b>, которые вы вписали сами при регистрации: имя, телефон, почта.</li>
+<li><b>Данные магазина</b>: товары и остатки, история прихода и продаж, записи о долгах.
+В записях о долгах — имя и телефон человека, которые вписал сотрудник магазина.</li>
+<li><b>Лента изменений</b>: кто из сотрудников что сделал и когда.</li>
+</ul>
+<p>Программа не ведёт рекламу и слежку, не ставит счётчики посещений и не продаёт
+и не передаёт данные никому для своих целей.</p>
+
+<h2>Кто видит</h2>
+<p>Данные магазина видят только хозяин и сотрудники, которых он подтвердил.
+Новый человек после входа ждёт подтверждения и до этого не видит ничего.
+Это держат правила самой базы данных, а не только программа.</p>
+
+<h2>Где хранится</h2>
+<ul>
+<li><b>Supabase</b> — облачная база данных и вход в программу
+(<a href="https://supabase.com/privacy" rel="noopener">их политика</a>).</li>
+<li><b>Google</b> — подтверждает, что вы — это вы, при входе
+(<a href="https://policies.google.com/privacy" rel="noopener">их политика</a>).</li>
+<li><b>Vercel</b> отдаёт страницы сайта, <b>jsDelivr</b> — библиотеку для связи с базой.
+Они видят только сам запрос страницы, как любой сайт.</li>
+</ul>
+<p>На вашем телефоне программа хранит копию данных, чтобы работать без интернета.
+При выходе из программы эта копия стирается.</p>
+
+<h2>Как удалить</h2>
+<ul>
+<li><b>Свой аккаунт</b> сотрудник удаляет сам: вкладка «Команда» → «Удалить мой аккаунт».
+Вместе с ним удаляется вход и данные сотрудника.</li>
+<li><b>Записи магазина</b> — товары, долги, история — принадлежат магазину. Если в них
+есть ваше имя или телефон и вы хотите их убрать, скажите хозяину магазина.</li>
+<li>Хозяин может удалить все данные магазина целиком.</li>
+</ul>
+
+<h2>Вопросы</h2>
+<p>Спросите хозяина магазина, который пригласил вас в программу, или напишите
+разработчикам: <a href="https://github.com/ganihaknazarov99-netizen/sklad-go/issues" rel="noopener">github.com/ganihaknazarov99-netizen/sklad-go</a>.</p>
+<p>Если эта страница изменится, новая версия появится здесь же, с новой датой.</p>
+</section>
+
+<section id="en" lang="en">
+<h1>Privacy</h1>
+<small>Effective 2 November 2026</small>
+
+<p>Sklad Go is a stock and debt book for a small shop. It is used by the shop owner
+and by the staff the owner lets in. This page explains what the app stores, who can
+see it and how to delete it.</p>
+
+<h2>What is stored</h2>
+<ul>
+<li><b>Google sign-in.</b> The app receives only your name, email address and profile
+photo link from Google. It never sees your Google password.</li>
+<li><b>Staff details</b> you enter yourself when you register: name, phone, email.</li>
+<li><b>Shop data</b>: goods and stock levels, history of deliveries and sales, debt
+records. A debt record holds the name and phone number of the person, entered by shop staff.</li>
+<li><b>Activity log</b>: which staff member did what, and when.</li>
+</ul>
+<p>The app shows no ads, does no tracking, uses no analytics, and does not sell or
+share data with anyone for their own purposes.</p>
+
+<h2>Who can see it</h2>
+<p>Shop data is visible only to the owner and to staff the owner has approved.
+A new person waits for approval after signing in and sees nothing until then.
+This is enforced by the database rules, not only by the app.</p>
+
+<h2>Where it is kept</h2>
+<ul>
+<li><b>Supabase</b> — cloud database and sign-in
+(<a href="https://supabase.com/privacy" rel="noopener">their policy</a>).</li>
+<li><b>Google</b> — confirms your identity when you sign in
+(<a href="https://policies.google.com/privacy" rel="noopener">their policy</a>).</li>
+<li><b>Vercel</b> serves the website pages, <b>jsDelivr</b> serves the database library.
+They see only the page request itself, like any website.</li>
+</ul>
+<p>The app keeps a copy of the data on your phone so it can work offline.
+Signing out erases that copy.</p>
+
+<h2>How to delete</h2>
+<ul>
+<li><b>Your account</b>: staff delete it themselves on the “Команда” (Team) tab →
+“Удалить мой аккаунт” (Delete my account). This removes your sign-in and staff details.</li>
+<li><b>Shop records</b> — goods, debts, history — belong to the shop. If they contain
+your name or phone number and you want them removed, ask the shop owner.</li>
+<li>The owner can delete all shop data at once.</li>
+</ul>
+
+<h2>Questions</h2>
+<p>Ask the shop owner who invited you, or contact the developers:
+<a href="https://github.com/ganihaknazarov99-netizen/sklad-go/issues" rel="noopener">github.com/ganihaknazarov99-netizen/sklad-go</a>.</p>
+<p>If this page changes, the new version will appear here with a new date.</p>
+</section>
+</main></body></html>

@@ -201,7 +201,9 @@
   function loginScreen(msg) {
     screen('<p>Склад и долги магазина — на всех ваших устройствах. Входите тем же Gmail, ' +
       'что и остальная команда: владелец подтвердит доступ.</p><div class="err" id="ae"></div>' +
-      '<button class="go ac" id="gin">Войти через Google</button>');
+      '<button class="go ac" id="gin">Войти через Google</button>' +
+      // Google требует, чтобы со входа была видна политика конфиденциальности
+      '<p style="text-align:center;margin-top:14px"><a href="privacy.html" style="color:var(--mu)">Конфиденциальность · Privacy</a></p>');
     if (msg) document.getElementById('ae').textContent = msg;
     document.getElementById('gin').onclick = function () {
       this.disabled = true;

@@ -17,6 +17,8 @@ function makeConfig(o = {}) {
   const pick = (k, d) => (o[k] !== undefined ? o[k] : d);
   return {
     port: +pick('port', e.PORT || 3000),
+    // За Caddy ставьте 127.0.0.1: тогда сервер не виден снаружи в обход прокси и HTTPS
+    host: pick('host', e.HOST || ''),
     dbPath: pick('dbPath', e.DB_PATH || path.join(__dirname, '..', 'data', 'skladgo.db')),
     staticDir: pick('staticDir', path.join(__dirname, '..', '..', 'frontend')),
     requireVerify: pick('requireVerify', e.REQUIRE_VERIFY !== 'false'),

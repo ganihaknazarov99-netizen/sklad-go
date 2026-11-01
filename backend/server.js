@@ -123,7 +123,10 @@ function createApp(options = {}) {
 
   return {
     server, cfg, db, mailer,
-    listen: () => new Promise((r) => server.listen(cfg.port, () => r(server.address().port))),
+    listen: () => new Promise((r) => {
+      const done = () => r(server.address().port);
+      if (cfg.host) server.listen(cfg.port, cfg.host, done); else server.listen(cfg.port, done);
+    }),
     close: () => new Promise((r) => { docs.closeAll(); server.close(() => { try { db.close(); } catch (e) { /* ignore */ } r(); }); if (server.closeAllConnections) server.closeAllConnections(); }),
   };
 }

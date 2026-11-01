@@ -100,6 +100,8 @@ else
   cat > "$ENVF" <<EOF
 # Настройки сервера Sklad Go. Этот файл виден только пользователю $USER_NAME.
 PORT=3000
+# Снаружи сервер доступен только через Caddy (HTTPS), напрямую — нет
+HOST=127.0.0.1
 DB_PATH=$DIR/backend/data/skladgo.db
 SESSION_DAYS=30
 

@@ -427,7 +427,8 @@ create policy docs_update on public.docs for update using (public.is_active()) w
 -- Свою строку видно всегда — иначе не показать экран «ожидайте подтверждения».
 create policy staff_read   on public.staff for select using (uid = auth.uid() or public.is_active());
 create policy staff_insert on public.staff for insert with check (uid = auth.uid());
-create policy staff_update on public.staff for update using (uid = auth.uid() or public.is_owner()) with check (true);
+create policy staff_update on public.staff for update using (uid = auth.uid() or public.is_owner())
+  with check (uid = auth.uid() or public.is_owner());
 -- Удалять строки сотрудников через программу нельзя никому. Раньше было можно
 -- удалить свою: заблокированный так возвращался в очередь, а хозяин мог
 -- нечаянно освободить своё место. Уйти совсем — только через delete_my_account.
@@ -440,8 +441,19 @@ create policy activity_write on public.activity for insert with check (public.is
 -- поэтому «from public» здесь мало: отбираем у этих ролей поимённо.
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+revoke all on function public.doc_set(text, jsonb, bigint) from public, anon;
 grant execute on function public.doc_set(text, jsonb, bigint) to authenticated;
 revoke all on function public.may_claim_owner(uuid) from public, anon, authenticated;
+-- «Кто я такой» нужен вошедшим: на нём стоят правила доступа, а программа
+-- спрашивает, хозяин ли она. Без входа спрашивать незачем.
+revoke all on function public.is_active() from public, anon;
+revoke all on function public.is_owner()  from public, anon;
+grant execute on function public.is_active() to authenticated;
+grant execute on function public.is_owner()  to authenticated;
+-- Охранники срабатывают сами, при записи в таблицу. Вызывать их руками не нужно никому.
+revoke all on function public.staff_guard()    from public, anon, authenticated;
+revoke all on function public.activity_guard() from public, anon, authenticated;
+revoke all on function public.docs_guard()     from public, anon, authenticated;
 -- Помощники охраны долгов: снаружи их вызывать незачем.
 revoke all on function public.jarr(jsonb)                       from public, anon, authenticated;
 revoke all on function public.jnum(jsonb)                       from public, anon, authenticated;
