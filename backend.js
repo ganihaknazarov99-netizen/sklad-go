@@ -172,10 +172,29 @@
     a.innerHTML = '<div class="authbox">' + LOGO_IMG + '<h1>Sklad <span>Go</span></h1>' + html + '</div>';
     return a;
   }
+  // Если вход сорвался, Supabase возвращает человека на склад с ошибкой в адресе
+  // (?error=… и #error=…). Раньше программа её молча проглатывала и снова показывала
+  // кнопку «Войти» — и человек думал, что всё прошло, просто склад почему-то не открылся.
+  // Текст из адреса на экран не переносим: ссылку с любым «описанием ошибки» может
+  // прислать кто угодно. Узнаём ошибку и говорим своими словами.
+  function authErrorFromUrl() {
+    var q = new URLSearchParams((location.search || '').slice(1));
+    var h = new URLSearchParams((location.hash || '').slice(1));
+    var code = q.get('error') || h.get('error');
+    if (!code) return '';
+    var desc = q.get('error_description') || h.get('error_description') || '';
+    if (/access_denied/i.test(code)) return 'Вход отменён. Нажмите «Войти через Google» ещё раз.';
+    if (/exchange external code/i.test(desc)) {
+      return 'Google не подтвердил вход. Попробуйте ещё раз через пару минут. ' +
+        'Если повторится — скажите хозяину склада: у него неверно настроен вход через Google.';
+    }
+    return 'Не удалось войти через Google. Попробуйте ещё раз.';
+  }
   function loginScreen(msg) {
     screen('<p>Склад и долги магазина — на всех ваших устройствах. Входите тем же Gmail, ' +
-      'что и остальная команда: владелец подтвердит доступ.</p><div class="err" id="ae">' + (msg || '') + '</div>' +
+      'что и остальная команда: владелец подтвердит доступ.</p><div class="err" id="ae"></div>' +
       '<button class="go ac" id="gin">Войти через Google</button>');
+    if (msg) document.getElementById('ae').textContent = msg;
     document.getElementById('gin').onclick = function () {
       this.disabled = true;
       this.textContent = 'Открываю Google…';
@@ -210,7 +229,13 @@
     }
     sb.auth.getSession().then(function (r) {
       session = (r && r.data && r.data.session) || null;
-      if (!session) { loginScreen(); return; }
+      if (!session) {
+        var why = authErrorFromUrl();
+        // Убираем ошибку из адреса: иначе она висела бы и после обновления страницы
+        if (why && history.replaceState) history.replaceState(null, '', location.pathname);
+        loginScreen(why);
+        return;
+      }
       // Чужой аккаунт на этом телефоне или остатки демо — стираем, иначе уедут на сервер.
       var prev = null, demo = null;
       try { prev = localStorage.getItem('skladgo.uid'); demo = localStorage.getItem('skladgo.demo.v1'); } catch (e) {}
