@@ -179,6 +179,210 @@ begin
   return v;
 end $$;
 
+-- ---------- Охрана долгов и истории склада ----------
+-- Раньше любой подтверждённый продавец мог переписать склад и долги целиком:
+-- уменьшить чужой долг, стереть его, подписать запись именем хозяина. Теперь
+-- база сверяет каждую новую версию с прежней — так же, как сервер полной версии:
+--   · записанный долг не меняется задним числом: чей, дал или взял, сколько
+--     и какого числа — как было. Ошибку исправляют обратной записью;
+--   · удалить долг можно только в корзину, а из корзины он уходит только
+--     назад в долги — или когда корзина переполнена (держит 100 последних);
+--   · человек не пропадёт из долгов, пока за ним остаются записи;
+--   · запись в истории склада стирается, только если её отменили сразу
+--     (10 минут) или её вытеснили новые (история держит 400 последних);
+--   · кто внёс запись — подписывает база, а не телефон.
+-- Хозяину можно всё, но в ленте останется строчка, что он переписывал.
+
+-- Список из документа. Не список — значит, пусто.
+create or replace function public.jarr(j jsonb) returns jsonb
+  language sql immutable set search_path = public as $$
+  select case when jsonb_typeof(j) = 'array' then j else '[]'::jsonb end
+$$;
+
+-- Число из документа. Не число — ноль, как и у программы.
+create or replace function public.jnum(j jsonb) returns numeric
+  language sql immutable set search_path = public as $$
+  select case when jsonb_typeof(j) = 'number' then (j #>> '{}')::numeric else 0 end
+$$;
+
+-- Все записи долгов в документе: и в списке, и в корзине.
+-- entry — запись корзины, в которой лежит долг (у тех, что в списке, — пусто).
+create or replace function public.debt_recs(d jsonb)
+  returns table (id text, rec jsonb, entry jsonb)
+  language sql immutable set search_path = public as $$
+  select x->>'id', x, null::jsonb
+    from jsonb_array_elements(public.jarr(d->'ops')) x
+   where x->>'id' is not null
+  union all
+  select e->'op'->>'id', e->'op', e
+    from jsonb_array_elements(public.jarr(d->'trash')) e
+   where e->>'k' = 'op' and e->'op'->>'id' is not null
+  union all
+  select o->>'id', o, e
+    from jsonb_array_elements(public.jarr(d->'trash')) e,
+         jsonb_array_elements(public.jarr(e->'ops')) o
+   where e->>'k' = 'person' and o->>'id' is not null
+$$;
+
+-- Долг тот же: чей, дал или взял, сколько и какого числа. Старые записи
+-- называли «дал» и «взял» по-другому; программа переводит их сама, и это
+-- не правка долга.
+create or replace function public.debt_same(a jsonb, b jsonb) returns boolean
+  language sql immutable set search_path = public as $$
+  select a->'pid' is not distinct from b->'pid'
+     and a->'amt' is not distinct from b->'amt'
+     and a->'t'   is not distinct from b->'t'
+     and (case when a->>'type' in ('gave', 'paid') then 'give'
+               when a->>'type' in ('took', 'got')  then 'get' else a->>'type' end)
+         is not distinct from
+         (case when b->>'type' in ('gave', 'paid') then 'give'
+               when b->>'type' in ('took', 'got')  then 'get' else b->>'type' end)
+$$;
+
+-- Запись в истории склада узнаём по времени, операции, товару, количеству и сумме.
+create or replace function public.log_key(l jsonb) returns text
+  language sql immutable set search_path = public as $$
+  select jsonb_build_array(l->'t', l->'type', l->'id', l->'qty', l->'sum')::text
+$$;
+
+-- Подпись записи. Новую подписывает база: кто внёс, а долгу (at_ms) — и когда,
+-- если телефон не сказал. У прежней остаётся та подпись, что была, что бы ни
+-- прислал телефон.
+create or replace function public.sign_rec(x jsonb, was jsonb, who text, at_ms bigint) returns jsonb
+  language sql immutable set search_path = public as $$
+  select case
+    when jsonb_typeof(x) is distinct from 'object' then x
+    when was is not null then
+      (x - 'by' - 'at') || jsonb_strip_nulls(jsonb_build_object('by', was->'by', 'at', was->'at'))
+    when at_ms is null or (jsonb_typeof(x->'at') = 'number' and x->'at' > '0'::jsonb) then
+      x || jsonb_build_object('by', who)
+    else x || jsonb_build_object('by', who, 'at', at_ms)
+  end
+$$;
+
+create or replace function public.docs_guard() returns trigger
+  language plpgsql security definer set search_path = public as $$
+declare
+  prev     jsonb  := case when tg_op = 'UPDATE' then old.data else '{}'::jsonb end;
+  nowms    bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+  boss     boolean;
+  who      text;
+  known    jsonb;   -- записи долгов, что уже были, по номеру
+  seen     jsonb;   -- записи долгов в новой версии, по номеру
+  ptrash   jsonb;   -- прежняя корзина, по номеру
+  plog     jsonb;   -- прежняя история склада, по ключу записи
+  nlog     jsonb;   -- новая история склада, по ключу записи
+  full_    boolean;
+  oldest   numeric;
+  changed  int := 0;
+  gone     int := 0;
+begin
+  if tg_op = 'UPDATE' then
+    if new.id is distinct from old.id then raise exception 'doc_id_locked'; end if;
+    new.version := old.version + 1;          -- версию двигает база, телефон её не подделает
+    new.updated_at := now();
+  else
+    new.version := 1;
+  end if;
+
+  -- Без входа сюда пишет только SQL Editor — там хозяин базы, а не продавец.
+  if auth.uid() is null or new.id not in ('main', 'debts') then return new; end if;
+  if jsonb_typeof(new.data) is distinct from 'object' then raise exception 'bad_doc'; end if;
+
+  boss := public.is_owner();
+  who  := coalesce((select name from public.staff where uid = auth.uid()), '');
+
+  if new.id = 'debts' then
+    known  := coalesce((select jsonb_object_agg(r.id, r.rec) from public.debt_recs(prev) r), '{}'::jsonb);
+    seen   := coalesce((select jsonb_object_agg(r.id, r.rec) from public.debt_recs(new.data) r), '{}'::jsonb);
+    ptrash := coalesce((select jsonb_object_agg(e->>'id', e)
+                          from jsonb_array_elements(public.jarr(prev->'trash')) e
+                         where e->>'id' is not null), '{}'::jsonb);
+    select count(*) >= 100, min(public.jnum(e->'t')) into full_, oldest
+      from jsonb_array_elements(public.jarr(new.data->'trash')) e;
+
+    -- Записанный долг изменили — где бы он ни лежал, в списке или в корзине.
+    select count(*) into changed
+      from public.debt_recs(new.data) n
+     where (known -> n.id) is not null and not public.debt_same(known -> n.id, n.rec);
+
+    -- Долг пропал совсем: ни в списке, ни в корзине. Из переполненной корзины
+    -- старые записи уходят сами.
+    select count(*) into gone
+      from public.debt_recs(prev) k
+     where (seen -> k.id) is null
+       and not (k.entry is not null and full_ and public.jnum(k.entry->'t') < oldest);
+
+    -- Человек пропал, а записи за ним остались — их долги не видно на экране.
+    gone := gone + (
+      select count(*)
+        from jsonb_array_elements(public.jarr(prev->'people')) p
+       where p->>'id' is not null
+         and not exists (select 1 from jsonb_array_elements(public.jarr(new.data->'people')) q
+                          where q->>'id' = p->>'id')
+         and exists (select 1 from jsonb_array_elements(public.jarr(new.data->'ops')) o
+                      where o->>'pid' = p->>'id'));
+
+    if not boss and changed > 0 then raise exception 'debt_changed'; end if;
+    if not boss and gone > 0 then raise exception 'debt_vanished'; end if;
+    if changed + gone > 0 then
+      insert into public.activity (txt) values ('переписал задним числом записи долгов: ' || (changed + gone));
+    end if;
+
+    new.data := jsonb_set(new.data, '{ops}', coalesce((
+      select jsonb_agg(public.sign_rec(x, known -> (x->>'id'), who, nowms) order by i)
+        from jsonb_array_elements(public.jarr(new.data->'ops')) with ordinality e(x, i)
+    ), '[]'::jsonb));
+
+    new.data := jsonb_set(new.data, '{trash}', coalesce((
+      select jsonb_agg(
+               case when jsonb_typeof(x) is distinct from 'object' then x
+                    else public.sign_rec(x, ptrash -> (x->>'id'), who, null)
+                      || case
+                           when x->>'k' = 'op' and jsonb_typeof(x->'op') = 'object' then
+                             jsonb_build_object('op', public.sign_rec(x->'op', known -> (x->'op'->>'id'), who, nowms))
+                           when x->>'k' = 'person' and jsonb_typeof(x->'ops') = 'array' then
+                             jsonb_build_object('ops', (
+                               select coalesce(jsonb_agg(public.sign_rec(o, known -> (o->>'id'), who, nowms) order by j), '[]'::jsonb)
+                                 from jsonb_array_elements(x->'ops') with ordinality q(o, j)))
+                           else '{}'::jsonb
+                         end
+               end order by i)
+        from jsonb_array_elements(public.jarr(new.data->'trash')) with ordinality e(x, i)
+    ), '[]'::jsonb));
+
+  else   -- 'main': история склада
+    plog := coalesce((select jsonb_object_agg(public.log_key(l), l)
+                        from jsonb_array_elements(public.jarr(prev->'log')) l), '{}'::jsonb);
+    nlog := coalesce((select jsonb_object_agg(public.log_key(x), x)
+                        from jsonb_array_elements(public.jarr(new.data->'log')) x), '{}'::jsonb);
+    select count(*) >= 400, min(public.jnum(x->'t')) into full_, oldest
+      from jsonb_array_elements(public.jarr(new.data->'log')) x;
+
+    select count(*) into gone
+      from jsonb_array_elements(public.jarr(prev->'log')) l
+     where (nlog -> public.log_key(l)) is null
+       and not (full_ and public.jnum(l->'t') < oldest)          -- вытеснили новые
+       and not (nowms - public.jnum(l->'t') < 10 * 60 * 1000);   -- отменили сразу
+
+    if not boss and gone > 0 then raise exception 'log_vanished'; end if;
+    if gone > 0 then
+      insert into public.activity (txt) values ('стёр задним числом записи истории склада: ' || gone);
+    end if;
+
+    new.data := jsonb_set(new.data, '{log}', coalesce((
+      select jsonb_agg(public.sign_rec(x, plog -> public.log_key(x), who, null) order by i)
+        from jsonb_array_elements(public.jarr(new.data->'log')) with ordinality e(x, i)
+    ), '[]'::jsonb));
+  end if;
+
+  return new;
+end $$;
+
+drop trigger if exists docs_guard on public.docs;
+create trigger docs_guard before insert or update on public.docs
+  for each row execute function public.docs_guard();
+
 -- ---------- Удаление своего аккаунта ----------
 -- Хозяину нельзя: лавка осталась бы без хозяина.
 -- Заблокированному тоже: удалил бы аккаунт, вошёл тем же Google заново —
@@ -238,6 +442,13 @@ revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
 grant execute on function public.doc_set(text, jsonb, bigint) to authenticated;
 revoke all on function public.may_claim_owner(uuid) from public, anon, authenticated;
+-- Помощники охраны долгов: снаружи их вызывать незачем.
+revoke all on function public.jarr(jsonb)                       from public, anon, authenticated;
+revoke all on function public.jnum(jsonb)                       from public, anon, authenticated;
+revoke all on function public.debt_recs(jsonb)                  from public, anon, authenticated;
+revoke all on function public.debt_same(jsonb, jsonb)           from public, anon, authenticated;
+revoke all on function public.log_key(jsonb)                    from public, anon, authenticated;
+revoke all on function public.sign_rec(jsonb, jsonb, text, bigint) from public, anon, authenticated;
 
 -- ---------- Живые обновления ----------
 -- Без этого изменения с другого телефона не приедут сами.

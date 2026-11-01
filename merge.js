@@ -76,6 +76,75 @@
     o.trash = mergeList(B.trash, L.trash, R.trash, byId).sort(function (a, b) { return a.t - b.t; }).slice(-100);
     return o;
   }
-  var api = { eq: eq, mergeMain: mergeMain, mergeDebts: mergeDebts, mergeList: mergeList };
+  function copy(x) { return JSON.parse(JSON.stringify(x)); }
+
+  /* Сервер не принял правку записанного долга (debt_changed / debt_vanished).
+     Слияние тут не поможет: оно сохранит нашу же правку, и сервер откажет снова.
+     Поэтому всё, что на сервере уже записано, берём оттуда как есть, а своё новое —
+     чего на сервере ещё нет — оставляем, чтобы отправить ещё раз. */
+  function debtsServerWins(L, R) {
+    L = L || {}; R = R || {};
+    var srv = {}, srvTrash = {}, have = {}, live = {}, inTrash = {}, ppl = {};
+    function opsOf(x) {
+      if (!x) return [];
+      if (x.k === 'op') return x.op ? [x.op] : [];
+      if (x.k === 'person') return (x.ops || []).filter(Boolean);
+      return [];
+    }
+    (R.ops || []).forEach(function (o) { if (o) srv[o.id] = o; });
+    (R.trash || []).forEach(function (x) {
+      if (!x) return;
+      srvTrash[x.id] = x;
+      opsOf(x).forEach(function (o) { srv[o.id] = o; });
+    });
+    var fix = function (o) { return o && srv[o.id] ? copy(srv[o.id]) : o; };
+
+    var out = { people: (L.people || []).slice(), ops: (L.ops || []).map(fix), trash: [] };
+    out.ops.forEach(function (o) { if (o) live[o.id] = 1; });
+    // Своя корзина: что сервер уже знает — как на сервере, новое — с серверными долгами внутри
+    (L.trash || []).forEach(function (x) {
+      if (!x) return;
+      var e = copy(srvTrash[x.id] || x);
+      if (!srvTrash[x.id]) {
+        if (e.k === 'op' && e.op) e.op = fix(e.op);
+        if (e.k === 'person' && e.ops) e.ops = e.ops.map(fix);
+      }
+      have[e.id] = 1; out.trash.push(e);
+    });
+    // Корзина сервера, которой у нас нет: возвращаем, если её долги не вернулись в список
+    (R.trash || []).forEach(function (x) {
+      if (!x || have[x.id]) return;
+      var ids = opsOf(x).map(function (o) { return o.id; });
+      if (ids.length && ids.every(function (id) { return live[id]; })) return;   // мы её восстановили
+      have[x.id] = 1; out.trash.push(copy(x));
+    });
+    out.trash.forEach(function (x) { opsOf(x).forEach(function (o) { inTrash[o.id] = 1; }); });
+    // Долги сервера, которых у нас нет ни в списке, ни в корзине, — возвращаем
+    (R.ops || []).forEach(function (o) {
+      if (o && !live[o.id] && !inTrash[o.id]) { out.ops.push(copy(o)); live[o.id] = 1; }
+    });
+    // Человек, за которым остались долги, должен быть в списке — иначе их не видно
+    out.people.forEach(function (p) { if (p) ppl[p.id] = 1; });
+    (R.people || []).forEach(function (p) {
+      if (p && !ppl[p.id] && out.ops.some(function (o) { return o && o.pid === p.id; })) { out.people.push(copy(p)); ppl[p.id] = 1; }
+    });
+    out.ops.sort(function (a, b) { return ((a && (a.at || a.t)) || 0) - ((b && (b.at || b.t)) || 0); });
+    out.trash.sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
+    return out;
+  }
+
+  /* То же для истории склада (log_vanished): записи, которые на сервере есть,
+     берём оттуда как есть, свои новые оставляем. Ключ — как у сервера. */
+  function logServerWins(L, R) {
+    var key = function (x) { return [x.t, x.type, x.id, x.qty, x.sum].join('|'); };
+    var srv = {}, have = {};
+    (R || []).forEach(function (x) { if (x) srv[key(x)] = x; });
+    var out = (L || []).filter(Boolean).map(function (x) { var k = key(x); have[k] = 1; return srv[k] ? copy(srv[k]) : x; });
+    (R || []).forEach(function (x) { if (x && !have[key(x)]) { have[key(x)] = 1; out.push(copy(x)); } });
+    return out.sort(function (a, b) { return b.t - a.t; });
+  }
+
+  var api = { eq: eq, mergeMain: mergeMain, mergeDebts: mergeDebts, mergeList: mergeList,
+              debtsServerWins: debtsServerWins, logServerWins: logServerWins };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SkladMerge = api;
 })(typeof window !== 'undefined' ? window : globalThis);

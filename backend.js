@@ -24,11 +24,19 @@
     : null;
 
   /* ---------- Ошибки ----------
-     Приложению важны два кода: version_conflict (слить и повторить) и network (данные
-     остаются на телефоне, отправим при связи). Остальное — обычная ошибка. */
+     Приложению важны коды: version_conflict (слить и повторить), network (данные
+     остаются на телефоне, отправим при связи) и отказы охраны долгов и истории
+     склада — тогда записанное берём с сервера как есть. Остальное — обычная ошибка. */
+  var ОТКАЗЫ = {
+    debt_changed: 'Записанный долг нельзя изменить задним числом. Добавьте обратную запись',
+    debt_vanished: 'Запись о долге нельзя удалить незаметно — она уходит в корзину',
+    log_vanished: 'Запись в истории склада нельзя стереть задним числом. Исправьте пересчётом или новой записью'
+  };
   function err(e) {
     var m = (e && (e.message || e.error_description || e.details)) || '';
     if (/version_conflict/i.test(m)) return { code: 'version_conflict', message: m };
+    var отказ = /\b(debt_changed|debt_vanished|log_vanished)\b/.exec(m);
+    if (отказ) return { code: отказ[1], message: ОТКАЗЫ[отказ[1]] };
     if (!navigator.onLine || /fetch|network|timeout|connection|ECONN/i.test(m)) return { code: 'network', message: m };
     return { code: (e && e.code) || 'error', message: m };
   }
