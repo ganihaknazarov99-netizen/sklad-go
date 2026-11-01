@@ -38,6 +38,16 @@ function doPush(n,pre){
     if(!anyDirty())setSy('ok');
   },function(e){
     pending=false;
+    /* Сервер не принял переписанную историю. Слияние тут не поможет — оно сохранит
+       нашу же правку, и сервер откажет снова. Записанное на сервере берём оттуда
+       как есть, свои новые записи оставляем и отправляем ещё раз. */
+    if(e&&e.code==='log_vanished'&&n<4){
+      dbd.get().then(function(sn){
+        if(sn.exists){mergeMainIn(sn.data(),sn.version);S.log=SkladMerge.logServerWins(S.log,cleanMain(sn.data()).log);try{localStorage.setItem(KEY,JSON.stringify(S))}catch(x){}}
+        toast('⚠️ '+e.message);render();doPush(n+1);
+      },function(){setSy('off');scheduleRetry()});
+      return;
+    }
     if(e&&e.code==='version_conflict'&&n<4){
       dbd.get().then(function(sn){if(sn.exists)mergeMainIn(sn.data(),sn.version);doPush(n+1)},function(){setSy('off');scheduleRetry()});
     }else{setSy(isNet(e)?'off':'err');scheduleRetry()}
@@ -799,6 +809,16 @@ function ddoPush(n,pre){
     if(!anyDirty())setSy('ok');
   },function(e){
     dpending=false;
+    /* Сервер не принял правку записанного долга. Слать то же самое по кругу
+       бессмысленно: записанное на сервере берём оттуда как есть — там оно
+       правдивое, — свои новые записи оставляем и отправляем ещё раз. */
+    if(e&&(e.code==='debt_changed'||e.code==='debt_vanished')&&n<4){
+      ddb.get().then(function(sn){
+        if(sn.exists){dmergeIn(sn.data(),sn.version);D=dnorm(SkladMerge.debtsServerWins(D,cleanDebts(sn.data())));try{localStorage.setItem('skladgo.debts',JSON.stringify(D))}catch(x){}}
+        toast('⚠️ '+e.message);render();ddoPush(n+1);
+      },function(){setSy('off');scheduleRetry()});
+      return;
+    }
     if(e&&e.code==='version_conflict'&&n<4){
       ddb.get().then(function(sn){if(sn.exists)dmergeIn(sn.data(),sn.version);ddoPush(n+1)},function(){setSy('off');scheduleRetry()});
     }else{setSy(isNet(e)?'off':'err');scheduleRetry()}

@@ -7,6 +7,7 @@
 // как в Supabase, и правила доступа (RLS) действуют на самом деле.
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 
 const СХЕМА = process.argv[2] || new URL('./schema.sql', import.meta.url);
 const db = new PGlite();
@@ -126,12 +127,143 @@ const з = (await db.query('select t, "by", uid from public.activity order by id
    (await как(ПРОДАВЕЦ, "update public.activity set txt = 'ничего не было' returning id")).rows.length === 0, 'запись в ленте не исправить');
 да((await как(ПРОДАВЕЦ, 'delete from public.activity returning id')).rows.length === 0, 'запись в ленте не стереть');
 
-console.log('\n11. Продавец назвался именем хозяина');
+// --- Долги и история склада ---
+const писать = (uid, id, data) => как(uid, 'select public.doc_set($1, $2::jsonb, null)', [id, JSON.stringify(data)]);
+const отказ = async (uid, id, data) => { try { await писать(uid, id, data); return null; } catch (e) { return e.message; } };
+const док = async (id) => (await db.query('select data from public.docs where id = $1', [id])).rows[0].data;
+const последняя = async () => (await db.query('select "by", txt from public.activity order by id desc limit 1')).rows[0];
+const долгО = (d, id) => d.ops.find((o) => o.id === id);
+const ВЧЕРА = Date.now() - 864e5;
+const бахром = { id: 'p1', name: 'Бахром' };
+const долг = { id: 'o1', pid: 'p1', type: 'give', amt: 1000, t: ВЧЕРА, note: '', by: 'Ганӣ', at: ВЧЕРА };
+const давний = { id: 'o0', pid: 'p1', type: 'gave', amt: 50, t: ВЧЕРА - 1, note: '', by: 'Ганӣ', at: ВЧЕРА - 1 };   // старое название «дал»
+
+console.log('\n11. Хозяин записал долг. Продавец пытается его переписать');
+await писать(ХОЗЯИН, 'debts', { people: [бахром], ops: [давний, долг], trash: [] });
+let d = await док('debts');
+да(d.ops.length === 2, 'долг записан');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { people: [бахром], ops: [давний, { ...долг, amt: 10 }], trash: [] });
+да(ош && /debt_changed/.test(ош), 'сумму долга задним числом не уменьшить: ' + (ош || 'переписалось!'));
+да(долгО(await док('debts'), 'o1').amt === 1000, 'в базе по-прежнему 1000');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { people: [бахром], ops: [давний, { ...долг, pid: 'p2' }], trash: [] });
+да(ош && /debt_changed/.test(ош), 'долг на другого человека не перевесить');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { people: [бахром], ops: [давний, { ...долг, type: 'get' }], trash: [] });
+да(ош && /debt_changed/.test(ош), '«я дал» на «я взял» не перевернуть');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { people: [бахром], ops: [давний], trash: [] });
+да(ош && /debt_vanished/.test(ош), 'долг молча не стереть — только через корзину: ' + (ош || 'стёрся!'));
+ош = await отказ(ПРОДАВЕЦ, 'debts', { people: [], ops: [давний, долг], trash: [] });
+да(ош && /debt_vanished/.test(ош), 'человека с долгами из списка не убрать — его долги пропали бы с экрана');
+ош = await какОшибка(ПРОДАВЕЦ, "update public.docs set data = jsonb_set(data, '{ops}', '[]'::jsonb) where id = 'debts'");
+да(ош && /debt_vanished/.test(ош), 'и прямой записью в таблицу, в обход doc_set, — тоже');
+ош = await какОшибка(ПРОДАВЕЦ, "update public.docs set id = 'debts_old' where id = 'debts'");
+да(ош && /doc_id_locked/.test(ош), 'документ долгов не переименовать, чтобы завести чистый');
+
+console.log('\n12. Честная работа продавца проходит');
+const новый = { id: 'o2', pid: 'p1', type: 'get', amt: 300, t: Date.now(), note: '', by: 'Ганӣ', at: 0 };
+ош = await отказ(ПРОДАВЕЦ, 'debts', { people: [бахром], ops: [{ ...давний, type: 'give' }, долг, новый], trash: [] });
+да(!ош, 'новый долг записан; «gave → give», как переводит программа, — не правка' + (ош ? ': ' + ош : ''));
+d = await док('debts');
+да(долгО(d, 'o2').by === 'Алишер', 'подпись поставила база: «' + долгО(d, 'o2').by + '», а не «Ганӣ»');
+да(долгО(d, 'o2').at > Date.now() - 60000, 'время записи — тоже база');
+await писать(ПРОДАВЕЦ, 'debts', { ...d, ops: d.ops.map((o) => o.id === 'o2' ? { ...o, by: 'Ганӣ', note: 'вернёт в пятницу' } : o) });
+d = await док('debts');
+да(долгО(d, 'o2').by === 'Алишер', 'свою запись не переподписать именем хозяина — подпись вернулась');
+да(долгО(d, 'o2').note === 'вернёт в пятницу', 'а заметку поправить можно');
+
+console.log('\n13. Корзина долгов');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { ...d, ops: d.ops.filter((o) => o.id !== 'o1'),
+  trash: [{ id: 't1', k: 'op', t: Date.now(), by: 'Ганӣ', pn: 'Бахром', op: долгО(d, 'o1'), person: null }] });
+да(!ош, 'удалить долг в корзину можно' + (ош ? ': ' + ош : ''));
+d = await док('debts');
+да(d.trash[0].by === 'Алишер', 'кто удалил — подписала база: «' + d.trash[0].by + '»');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { ...d, trash: [{ ...d.trash[0], op: { ...d.trash[0].op, amt: 1 } }] });
+да(ош && /debt_changed/.test(ош), 'долг в корзине не подправить');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { ...d, trash: [] });
+да(ош && /debt_vanished/.test(ош), 'из корзины долг не выбросить — только вернуть');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { ...d, ops: [...d.ops, { ...d.trash[0].op, amt: 1 }], trash: [] });
+да(ош && /debt_changed/.test(ош), 'вернуть из корзины с другой суммой нельзя');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { ...d, ops: [...d.ops, { ...d.trash[0].op, by: 'Алишер' }], trash: [] });
+да(!ош, 'вернуть как было — можно' + (ош ? ': ' + ош : ''));
+d = await док('debts');
+да(долгО(d, 'o1').by === 'Ганӣ', 'и подпись у вернувшегося долга прежняя');
+
+// Корзина держит 100 последних: сто первая запись вытесняет самую старую
+const мусор = Array.from({ length: 100 }, (_, k) => ({ id: 'x' + k, k: 'op', t: ВЧЕРА + k, pn: 'Бахром',
+  op: { id: 'ox' + k, pid: 'p1', type: 'give', amt: 1, t: ВЧЕРА + k } }));
+await писать(ХОЗЯИН, 'debts', { ...d, trash: мусор });
+d = await док('debts');
+const вКорзину = { id: 't2', k: 'op', t: Date.now(), pn: 'Бахром', op: долгО(d, 'o2'), person: null };
+ош = await отказ(ПРОДАВЕЦ, 'debts', { ...d, ops: d.ops.filter((o) => o.id !== 'o2'), trash: [...d.trash.slice(1), вКорзину] });
+да(!ош, 'полная корзина: самая старая запись уходит сама' + (ош ? ': ' + ош : ''));
+await писать(ХОЗЯИН, 'debts', d);   // вернуть как было — хозяину можно
+d = await док('debts');
+ош = await отказ(ПРОДАВЕЦ, 'debts', { ...d, ops: d.ops.filter((o) => o.id !== 'o2'),
+  trash: [...d.trash.filter((x) => x.id !== 'x50'), вКорзину] });
+да(ош && /debt_vanished/.test(ош), 'а выбросить запись из середины корзины — нельзя');
+
+console.log('\n14. Хозяину можно, но след остаётся');
+await писать(ХОЗЯИН, 'debts', { ...d, ops: d.ops.map((o) => o.id === 'o1' ? { ...o, amt: 900 } : o) });
+да(долгО(await док('debts'), 'o1').amt === 900, 'хозяин исправил сумму');
+let след = await последняя();
+да(след["by"] === 'Ганӣ' && /переписал/.test(след.txt), 'в ленте: «' + след["by"] + ': ' + след.txt + '»');
+
+console.log('\n15. История склада');
+const продажа = (t, qty, by = 'Ганӣ') => ({ by, t, type: 'out', id: 'i1', name: 'Футболка', qty, sum: qty * 100, note: '' });
+await писать(ХОЗЯИН, 'main', { items: [], log: [продажа(Date.now() - 60000, 1), продажа(ВЧЕРА, 2)], cats: [], trash: [], biz: '' });
+let м = await док('main');
+ош = await отказ(ПРОДАВЕЦ, 'main', { ...м, log: [м.log[0]] });
+да(ош && /log_vanished/.test(ош), 'вчерашнюю продажу из истории не стереть: ' + (ош || 'стёрлась!'));
+ош = await отказ(ПРОДАВЕЦ, 'main', { ...м, log: [м.log[0], { ...м.log[1], qty: 1, sum: 100 }] });
+да(ош && /log_vanished/.test(ош), 'количество во вчерашней продаже не подправить');
+ош = await отказ(ПРОДАВЕЦ, 'main', { ...м, log: [м.log[1]] });
+да(!ош, 'только что сделанную продажу отменить можно (10 минут)' + (ош ? ': ' + ош : ''));
+м = await док('main');
+await писать(ПРОДАВЕЦ, 'main', { ...м, log: [продажа(Date.now(), 3), ...м.log] });
+м = await док('main');
+да(м.log[0].by === 'Алишер', 'новую запись подписала база: «' + м.log[0].by + '»');
+await писать(ПРОДАВЕЦ, 'main', { ...м, log: м.log.map((l, k) => k === 0 ? { ...l, by: 'Ганӣ' } : l) });
+да((await док('main')).log[0].by === 'Алишер', 'переподписать запись истории нельзя');
+м = await док('main');
+await писать(ХОЗЯИН, 'main', { ...м, log: м.log.filter((l) => l.t !== ВЧЕРА) });
+след = await последняя();
+да(след["by"] === 'Ганӣ' && /стёр/.test(след.txt), 'хозяин стёр старую запись — в ленте: «' + след["by"] + ': ' + след.txt + '»');
+м = await док('main');
+await писать(ХОЗЯИН, 'main', { ...м, log: [...м.log, продажа(ВЧЕРА, 5)] });
+м = await док('main');
+ош = await отказ(ПРОДАВЕЦ, 'main', { ...м, log: Array.from({ length: 400 }, (_, k) => продажа(Date.now() - k, 1)) });
+да(!ош, 'история полна (400) — вчерашнее вытесняют новые записи' + (ош ? ': ' + ош : ''));
+
+console.log('\n16. Программа продавца переживает отказ и ничего своего не теряет');
+const SkladMerge = createRequire(import.meta.url)('../merge.js');
+d = await док('debts');
+const телефон = { ...d, ops: [...d.ops.map((o) => o.id === 'o1' ? { ...o, amt: 1 } : o),
+  { id: 'o9', pid: 'p1', type: 'give', amt: 70, t: Date.now(), by: 'Алишер', at: Date.now() }] };
+ош = await отказ(ПРОДАВЕЦ, 'debts', телефон);
+да(ош && /debt_changed/.test(ош), 'сервер правку старого долга не принял');
+ош = await отказ(ПРОДАВЕЦ, 'debts', SkladMerge.debtsServerWins(телефон, await док('debts')));
+да(!ош, 'со второй попытки ушло: спорное взято с сервера' + (ош ? ': ' + ош : ''));
+d = await док('debts');
+да(долгО(d, 'o1').amt === 900 && !!долгО(d, 'o9'), 'старый долг — как на сервере (900), а новый долг продавца не потерялся');
+const безЧеловека = { ...d, people: [] };
+ош = await отказ(ПРОДАВЕЦ, 'debts', безЧеловека);
+да(ош && /debt_vanished/.test(ош), 'сервер не принял список без человека с долгами');
+ош = await отказ(ПРОДАВЕЦ, 'debts', SkladMerge.debtsServerWins(безЧеловека, await док('debts')));
+да(!ош && (await док('debts')).people.some((p) => p.id === 'p1'), 'со второй попытки человек вернулся в список');
+await писать(ХОЗЯИН, 'main', { ...м, log: Array.from({ length: 10 }, (_, k) => продажа(ВЧЕРА + k, 1)) });
+м = await док('main');
+const история = [продажа(Date.now(), 7, 'Алишер'), ...м.log.slice(0, 5)];   // половина старого стёрлась на телефоне
+ош = await отказ(ПРОДАВЕЦ, 'main', { ...м, log: история });
+да(ош && /log_vanished/.test(ош), 'сервер не принял историю с дырой');
+ош = await отказ(ПРОДАВЕЦ, 'main', { ...м, log: SkladMerge.logServerWins(история, м.log) });
+м = await док('main');
+да(!ош && м.log.length === 11 && м.log.some((l) => l.qty === 7), 'со второй попытки: история целая, новая продажа на месте');
+
+console.log('\n17. Продавец назвался именем хозяина');
 await как(ПРОДАВЕЦ, 'update public.staff set name = $1 where uid = $2', ['ганӣ ', ПРОДАВЕЦ]);
 const имя = (await строка(ПРОДАВЕЦ)).name;
 да(имя !== 'ганӣ' && /сотрудник/.test(имя), 'под хозяина не встать, база дописала пометку: «' + имя + '»');
 
-console.log('\n12. Хозяин увольняет продавца, тот пытается вернуться');
+console.log('\n18. Хозяин увольняет продавца, тот пытается вернуться');
 await как(ХОЗЯИН, "update public.staff set status = 'blocked' where uid = $1", [ПРОДАВЕЦ]);
 да((await строка(ПРОДАВЕЦ)).status === 'blocked', 'продавец заблокирован');
 await как(ПРОДАВЕЦ, 'delete from public.staff where uid = $1', [ПРОДАВЕЦ]);
@@ -140,7 +272,7 @@ await как(ПРОДАВЕЦ, 'delete from public.staff where uid = $1', [ПР�
 да(ош && /blocked_cannot_delete/.test(ош), 'удалить аккаунт и войти заново не выйдет: ' + (ош || 'удалился!'));
 да((await как(ПРОДАВЕЦ, 'select id from public.docs')).rows.length === 0, 'заблокированный склада не видит');
 
-console.log('\n13. Хозяин не может случайно лишить лавку хозяина');
+console.log('\n19. Хозяин не может случайно лишить лавку хозяина');
 await как(ХОЗЯИН, "update public.staff set status = 'blocked' where uid = $1", [ХОЗЯИН]);
 да((await строка(ХОЗЯИН)).status === 'active', 'себя не заблокировать');
 await как(ХОЗЯИН, 'delete from public.staff where uid = $1', [ХОЗЯИН]);
@@ -148,19 +280,19 @@ await как(ХОЗЯИН, 'delete from public.staff where uid = $1', [ХОЗЯ�
 ош = await какОшибка(ХОЗЯИН, 'select public.delete_my_account()');
 да(ош && /owner_cannot_delete/.test(ош), 'аккаунт хозяина не удалить');
 
-console.log('\n14. Настройки лавки закрыты для всех');
+console.log('\n20. Настройки лавки закрыты для всех');
 да((await как(ХОЗЯИН, 'select * from public.settings')).rows.length === 0, 'даже хозяин через программу почту хозяина не прочтёт');
 ош = await какОшибка(ВОР, "insert into public.settings values ('owner_email', 'vor@example.com') on conflict (key) do update set value = excluded.value");
 const почта = (await db.query("select value from public.settings where key = 'owner_email'")).rows[0].value;
 да(почта === ПОЧТА_ХОЗЯИНА, 'вор не переписал почту хозяина на свою' + (ош ? '' : ' (запрос прошёл, но ничего не изменил)'));
 да(!!(await какОшибка(ВОР, "select public.may_claim_owner($1::uuid)", [ВОР])), 'проверку «могу ли я стать хозяином» снаружи не вызвать');
 
-console.log('\n15. Новенький в очереди уходит сам');
+console.log('\n21. Новенький в очереди уходит сам');
 ош = await какОшибка(ВОР, 'select public.delete_my_account()');
 да(!ош, 'ожидающий может удалить свой аккаунт' + (ош ? ': ' + ош : ''));
 да(!(await строка(ВОР)), 'и его строки больше нет');
 
-console.log('\n16. Схему можно запустить повторно');
+console.log('\n22. Схему можно запустить повторно');
 ош = null;
 try { await db.exec(схема); } catch (e) { ош = e.message; }
 да(!ош, 'повторный запуск прошёл без ошибок' + (ош ? ': ' + ош : ''));
