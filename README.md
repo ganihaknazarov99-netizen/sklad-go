@@ -57,15 +57,25 @@
    В Google Cloud в «Authorized redirect URIs» добавьте адрес, который показывает Supabase:
    `https://<ваш-проект>.supabase.co/auth/v1/callback`.
    Client Secret вписывается только сюда — в код он не попадает никогда.
+
+   Google показывает Client Secret **один раз**, в окошке сразу после создания клиента.
+   Закрыли, не вставив, — ничего страшного: Clients → ваш клиент → **Add secret**.
+   Проверить, что ключ лёг, можно без входа: адрес
+   `https://<ваш-проект>.supabase.co/auth/v1/authorize?provider=google` должен
+   отправлять на accounts.google.com, а не отвечать «missing OAuth secret».
+
+   Пока приложение в Google в режиме **Testing**, войти могут только люди из списка
+   **Audience → Test users** (до ста человек) — впишите туда себя и продавцов.
+   Чтобы входил любой, нужно **Publish app**, а для этого Google требует ссылку на
+   политику конфиденциальности на странице **Branding**.
 6. **Authentication → URL Configuration**:
    - **Site URL**: `https://skladgo.vercel.app`
-   - **Redirect URLs** — все адреса, по которым программа открыта, иначе вход
-     с них не вернётся обратно:
+   - **Redirect URLs** — только адрес настоящего склада:
      ```
-     https://skladgo.vercel.app
-     https://sklad-go-gani26.vercel.app
-     https://ganihaknazarov99-netizen.github.io/sklad-go/
+     https://skladgo.vercel.app/**
      ```
+     Остальные адреса — витрина, им вход не нужен. Чем короче этот список, тем
+     меньше мест, куда можно увести человека после входа.
 7. **`config.js`** → в список `МАГАЗИН` впишите строку для `skladgo.vercel.app`:
    - адрес — **Project Settings → Data API** → Project URL, без хвоста `/rest/v1/`;
    - ключ — **Project Settings → API Keys** → **publishable** (`sb_publishable_…`).
