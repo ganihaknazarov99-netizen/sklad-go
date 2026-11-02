@@ -71,19 +71,32 @@
 
   /* ---------- Владелец, команда и лента — без сервера ---------- */
   window.skladLoadJS('app.js').then(function () {
+    // Свой склад (после «Начать свой склад»): в команде только сам хозяин, лента пустая.
+    // Раньше показательные Алишер и Нигина оставались и в чужом, уже своём складе
+    var own = false;
+    try { own = localStorage.getItem('skladgo.own') === '1'; } catch (e) {}
     isOwn = true;
     myId = 'demo-owner';
-    staff = [
+    var me = ME || {};
+    staff = own ? [
+      { _id: 'demo-owner', uid: 'demo-owner', name: me.name || 'Хозяин', phone: me.phone || '', mail: me.mail || '', owner: true, status: 'active', t: Date.now() }
+    ] : [
       { _id: 'demo-owner', uid: 'demo-owner', name: 'Ганӣ', phone: '+992 90 000 00 01', mail: 'demo@sklad.go', owner: true, status: 'active', t: Date.now() },
       { _id: 'demo-s1', uid: 'demo-s1', name: 'Алишер', phone: '+992 90 000 00 02', mail: 'alisher@sklad.go', owner: false, status: 'active', t: Date.now() },
       { _id: 'demo-s2', uid: 'demo-s2', name: 'Нигина', phone: '+992 90 000 00 03', mail: 'nigina@sklad.go', owner: false, status: 'pending', t: Date.now() }
     ];
     var t0 = Date.now();
-    actList = [
+    actList = own ? [] : [
       { t: t0 - 36e5, by: 'Алишер', txt: 'записал долг: Мадина · 220 сом' },
       { t: t0 - 72e5, by: 'Алишер', txt: 'продал 3 × Футболка хлопок · M · Чёрный' },
       { t: t0 - 108e5, by: 'Ганӣ', txt: 'добавил товар «Куртка зимняя · L · Чёрный»' }
     ];
+    if (own) {
+      var bar = document.getElementById('demobar');
+      bar.firstChild.innerHTML = '<b>Свой склад</b> · хранится только в этом браузере';
+      document.getElementById('democlean').style.display = 'none';
+      document.getElementById('demoreset').textContent = 'Показать демо';
+    }
     // В демо подтверждение и блокировка сотрудника меняют список на месте, без сервера.
     setSt = function (id, st) {
       staff.forEach(function (x) { if (x._id === id) x.status = st; });
@@ -97,8 +110,12 @@
     var wipe = function () {
       try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('skladgo.') === 0) localStorage.removeItem(k); }); } catch (e) {}
     };
-    // «Сбросить» — вернуть показательные данные магазина
-    document.getElementById('demoreset').onclick = function () { wipe(); location.reload(); };
+    // «Сбросить» — вернуть показательные данные магазина. В своём складе это стирает
+    // товары и долги человека, поэтому там — только со второго нажатия
+    document.getElementById('demoreset').onclick = function () {
+      if (own && this.dataset.ok !== '1') { this.dataset.ok = '1'; this.textContent = '❗ Ваши товары сотрутся. Ещё раз'; return; }
+      wipe(); location.reload();
+    };
     // «Начать свой склад» — пустой склад вместо чужих курток: метку засева ставим,
     // а данные не кладём, поэтому при перезагрузке демо-товары не вернутся
     document.getElementById('democlean').onclick = function () {
@@ -106,12 +123,13 @@
       wipe();
       try {
         localStorage.setItem('skladgo.demo.v1', '1');
+        localStorage.setItem('skladgo.own', '1');
         localStorage.setItem('skladgo.me', JSON.stringify({ name: 'Хозяин', phone: '', mail: '' }));
       } catch (e) {}
       location.href = location.pathname;   // уходим с ?reset, иначе демо-данные вернутся
     };
 
     render();
-    setTimeout(function () { toast('Это демо: меняйте остатки и долги — всё сохранится в браузере', true); }, 400);
+    setTimeout(function () { toast(own ? 'Ваш склад хранится в этом браузере — на другом телефоне его не будет' : 'Это демо: меняйте остатки и долги — всё сохранится в браузере'); }, 400);
   });
 })();
