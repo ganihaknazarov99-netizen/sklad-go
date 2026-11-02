@@ -23,5 +23,15 @@ function readJson(req, limit) {
     req.on('error', reject);
   });
 }
-const clientIp = (req) => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+// Адрес посетителя. За Caddy на этой же машине настоящий адрес приходит в X-Forwarded-For.
+// Раньше заголовку верили от кого угодно: подставь туда случайный адрес на каждую попытку —
+// и ограничение попыток входа не сработает. Теперь верим, только если запрос пришёл с этой
+// же машины (то есть от своего прокси), и берём последний адрес — его дописал сам прокси.
+const isLoopback = (a) => a === '::1' || /^(::ffff:)?127\./.test(a);
+function clientIp(req) {
+  const peer = req.socket.remoteAddress || '';
+  if (!isLoopback(peer)) return peer;
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return xff.length ? xff[xff.length - 1] : peer;
+}
 module.exports = { HttpError, send, readJson, clientIp };

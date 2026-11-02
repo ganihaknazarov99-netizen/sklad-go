@@ -70,3 +70,10 @@ test('обычный вход без ошибки — экран чистый, �
   assert.match(els.auth.innerHTML, /Войти через Google/);
   assert.deepEqual(заменено, []);
 });
+
+test('со входа видна политика конфиденциальности — без неё Google не откроет вход для всех', async () => {
+  const { els } = загрузить();
+  await дождаться();
+  assert.match(els.auth.innerHTML, /href="privacy\.html"/);
+  assert.ok(require('node:fs').existsSync(require('node:path').join(__dirname, '..', '..', 'privacy.html')), 'сама страница лежит рядом');
+});
