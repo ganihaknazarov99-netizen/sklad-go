@@ -184,7 +184,9 @@ function vOf(i){return pf(i)*i.qty}
 function pTxt(i){return money(i.price)+(uOf(i)==='пачка'?(i.pb==='pack'?'/пачка':'/шт'):'')}
 function needPk(i){return uOf(i)==='пачка'&&i.pb!=='pack'&&!(i.pk&&i.pk[0]>0)}
 function priceHint(u,pb){return 'Цена, сом (за 1 '+(u!=='пачка'?'шт':pb==='pack'?'пачку':'штуку')+')'}
-function unitBlock(px,u,pk,pb){return '<div class="lbl">Единица учёта</div><div class="wrap" id="'+px+'uw"><div class="chip'+(u!=='пачка'?' on':'')+'" data-u="шт">шт</div><div class="chip'+(u==='пачка'?' on':'')+'" data-u="пачка">пачка</div></div><div id="'+px+'pb" style="display:'+(u==='пачка'?'block':'none')+'"><div class="lbl">Штук в пачке — от и до (можно заполнить позже)</div><div class="row"><input id="'+px+'k1" type="number" inputmode="numeric" placeholder="от, напр. 4" value="'+((pk&&pk[0])||'')+'"><input id="'+px+'k2" type="number" inputmode="numeric" placeholder="до, напр. 5" value="'+((pk&&pk[1])||'')+'"></div><div class="lbl">Цена указана за</div><div class="wrap" id="'+px+'bw"><div class="chip'+(pb!=='pack'?' on':'')+'" data-b="piece">1 штуку</div><div class="chip'+(pb==='pack'?' on':'')+'" data-b="pack">1 пачку</div></div></div>'}
+// nw — форма нового товара: там цена всегда за штуку, а штук в пачке столько, сколько выбрано размеров.
+// Выбор «за пачку» остаётся, только если товар копируют с того, где цена уже за пачку
+function unitBlock(px,u,pk,pb,nw){return '<div class="lbl">Единица учёта</div><div class="wrap" id="'+px+'uw"><div class="chip'+(u!=='пачка'?' on':'')+'" data-u="шт">шт</div><div class="chip'+(u==='пачка'?' on':'')+'" data-u="пачка">пачка</div></div><div id="'+px+'pb" style="display:'+(u==='пачка'?'block':'none')+'">'+(nw?'<div class="lbl" id="'+px+'pn" style="display:none"></div>':'')+'<div id="'+px+'kk"><div class="lbl">Штук в пачке — от и до (можно заполнить позже)</div><div class="row"><input id="'+px+'k1" type="number" inputmode="numeric" placeholder="от, напр. 4" value="'+((pk&&pk[0])||'')+'"><input id="'+px+'k2" type="number" inputmode="numeric" placeholder="до, напр. 5" value="'+((pk&&pk[1])||'')+'"></div></div>'+(nw&&pb!=='pack'?'':'<div class="lbl">Цена указана за</div><div class="wrap" id="'+px+'bw"><div class="chip'+(pb!=='pack'?' on':'')+'" data-b="piece">1 штуку</div><div class="chip'+(pb==='pack'?' on':'')+'" data-b="pack">1 пачку</div></div>')+'</div>'}
 function bindUnit(px,fn){
   [].forEach.call(document.querySelectorAll('#'+px+'uw .chip'),function(c){c.onclick=function(){[].forEach.call(document.querySelectorAll('#'+px+'uw .chip'),function(x){x.classList.toggle('on',x===c)});$(px+'pb').style.display=c.dataset.u==='пачка'?'block':'none';if(fn)fn()}});
   [].forEach.call(document.querySelectorAll('#'+px+'bw .chip'),function(c){c.onclick=function(){[].forEach.call(document.querySelectorAll('#'+px+'bw .chip'),function(x){x.classList.toggle('on',x===c)});if(fn)fn()}});
@@ -238,7 +240,7 @@ function listHtml(L){
   K.forEach(function(k){
     var g=G[k];if(g.length===1){h+=cardHtml(g[0],false);return}
     var tot=0,cs={},ss={},low=false;
-    g.forEach(function(i){tot+=i.qty;if(i.color)cs[i.color]=1;if(i.size)ss[i.size]=1;if(i.qty<=3)low=true});
+    g.forEach(function(i){tot+=i.qty;if(i.color)cs[i.color]=1;String(i.size||'').split(/,\s*/).forEach(function(z){if(z)ss[z]=1});if(i.qty<=3)low=true});   // у пачки в size весь размерный ряд через запятую
     var nc=Object.keys(cs).length,ns=Object.keys(ss).length,isO=fo[k]!==undefined?fo[k]:q.length>0;
     h+='<div class="card fold" data-f="'+esc(k)+'"><div class="info"><b>📁 '+esc(g[0].name)+'</b><small>'+esc(g[0].cat)+(nc?' · '+nc+' цв.':'')+(ns?' · '+ns+' разм.':'')+(g[0].price?' · '+pTxt(g[0]):'')+(estTxt(g)?' · '+estTxt(g):'')+'</small></div><div class="amt"><span class="'+(low?'late':'')+'">'+qt(tot,uOf(g[0]))+'</span><small>'+(isO?'▲ свернуть':'▼ открыть')+'</small></div></div>';
     if(isO){
@@ -360,23 +362,33 @@ function form(it,pre){
   var d=it||pre||{},isNew=!it,qm={};
   var h='<h2>'+(isNew?'Новый товар':'Изменить товар')+'</h2><br><input id="nm" placeholder="Название (напр. Куртка зимняя)" value="'+esc(d.name||'')+'"><select id="ct">'+S.cats.map(function(c){return '<option'+(c===d.cat?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'<option value="+">＋ Новая категория…</option></select>';
   h+='<div class="lbl">'+(isNew?'Цвета — нажмите нужные (можно несколько)':'Цвет')+'</div><div class="wrap" id="cw">'+COL.map(function(c){return '<div class="chip" data-col="'+c[0]+'"><i style="background:'+c[1]+'"></i>'+c[0]+'</div>'}).join('')+'</div><input id="cl" placeholder="'+(isNew?'Другие цвета через запятую':'Или впишите свой цвет')+'" value="'+(isNew?'':esc(d.color||''))+'">';
-  if(isNew)h+='<div class="lbl">Размеры — нажмите нужные</div><div class="wrap" id="sw">'+SC.map(function(x){return '<div class="chip" data-s="'+x+'">'+x+'</div>'}).join('')+'</div><input id="sz" placeholder="Или впишите: L, XL, XXL · M-XXXL · L-2XL"><div class="lbl">Сколько штук</div><input id="qa" type="number" inputmode="numeric" placeholder="Одинаково на все цвета и размеры"><div class="qg" id="qg"></div>';
+  if(isNew)h+='<div class="lbl" id="szl">Размеры — нажмите нужные</div><div class="wrap" id="sw">'+SC.map(function(x){return '<div class="chip" data-s="'+x+'">'+x+'</div>'}).join('')+'</div><input id="sz" placeholder="Или впишите: L, XL, XXL · M-XXXL · L-2XL"><div class="lbl" id="qal">Сколько штук</div><input id="qa" type="number" inputmode="numeric" placeholder="Одинаково на все цвета и размеры"><div class="qg" id="qg"></div>';
   else h+='<input id="sz" placeholder="Размер" value="'+esc(it.size)+'">';
-  h+=unitBlock('f',d.u,d.pk,d.pb)+'<input id="pr" type="number" inputmode="decimal" placeholder="'+priceHint(d.u==='пачка'?'пачка':'шт',d.pb)+'" value="'+(d.price||'')+'"><button class="go ac" id="sv">Сохранить</button>';
+  h+=unitBlock('f',d.u,d.pk,d.pb,isNew)+(isNew?'<div class="lbl" id="prl"></div>':'')+'<input id="pr" type="number" inputmode="decimal" placeholder="'+priceHint(d.u==='пачка'?'пачка':'шт',d.pb)+'" value="'+(d.price||'')+'">'+(isNew?'<small id="pp" style="margin:-4px 0 10px"></small>':'')+'<button class="go ac" id="sv">Сохранить</button>';
   open(h);
-  bindUnit('f',function(){var r=readUnit('f');$('pr').placeholder=priceHint(r.u,r.pb)});
+  bindUnit('f',function(){var r=readUnit('f');$('pr').placeholder=priceHint(r.u,r.pb);if(isNew)grid()});
   var CH=document.querySelectorAll('#cw .chip');
   $('ct').onchange=function(){if(this.value!=='+')return;var self=this;self.selectedIndex=0;if($('ncr'))return;var d=document.createElement('div');d.id='ncr';d.className='row';d.innerHTML='<input id="nci" placeholder="Название категории"><button class="go ac" id="ncb" style="padding:10px">Добавить</button>';self.after(d);$('nci').focus();$('ncb').onclick=function(){var c=$('nci').value.trim();if(!c)return;S.cats.push(c);save();var o=document.createElement('option');o.textContent=c;self.insertBefore(o,self.lastChild);self.value=c;d.remove()}};
   function rd(){[].forEach.call(document.querySelectorAll('[data-q]'),function(i){qm[i.dataset.q]=i.value})}
   function gc(){var a=[].map.call(document.querySelectorAll('#cw .chip.on'),function(c){return c.dataset.col});$('cl').value.split(/[,;]+/).forEach(function(x){x=x.trim();if(x&&a.indexOf(x)<0)a.push(x)});return a}
   function gs(){var a=[].map.call(document.querySelectorAll('#sw .chip.on'),function(c){return c.dataset.s});return sortSizes(a.concat(parseSizes($('sz').value)))}
-  function combos(){var C=gc(),Z=gs(),o=[];if(!C.length)C=[''];if(!Z.length)Z=[''];C.forEach(function(c){Z.forEach(function(z){o.push([c,z])})});return o}
-  function isSingle(K){return K.length===1&&!K[0][0]&&!K[0][1]}
+  // Пачка — по одной штуке каждого выбранного размера: размеры не дробят товар, а описывают пачку
+  function inPack(){return readUnit('f').u==='пачка'}
+  function combos(){var C=gc(),Z=gs(),o=[];if(!C.length)C=[''];Z=inPack()?[Z.join(', ')]:Z.length?Z:[''];C.forEach(function(c){Z.forEach(function(z){o.push([c,z])})});return o}
+  function isSingle(K){return K.length===1&&!K[0][0]&&(!K[0][1]||inPack())}
+  function ppx(){var r=readUnit('f'),Z=gs(),p=parseFloat($('pr').value)||0,a=Z.length||(r.pk&&r.pk[0])||0,b=Z.length||(r.pk&&r.pk[1])||a;$('pp').textContent=(r.u==='пачка'&&r.pb!=='pack'&&a&&p)?'Пачка: '+(a===b?a:a+'–'+b)+' шт × '+money(p)+' = '+(a===b?money(a*p):money(a*p)+' – '+money(b*p)):''}
   function grid(){
+    var P=inPack(),Z=gs();
+    $('szl').textContent=P?'Размеры в пачке — по одной штуке каждого':'Размеры — нажмите нужные';
+    $('qal').textContent=P?'Сколько пачек':'Сколько штук';$('qa').placeholder=P?'Одинаково на все цвета':'Одинаково на все цвета и размеры';
+    $('fkk').style.display=P&&Z.length?'none':'block';$('fpn').style.display=P&&Z.length?'block':'none';$('fpn').textContent='В пачке '+Z.length+' шт: '+Z.join(', ');
+    var ru=readUnit('f');$('prl').textContent=priceHint(ru.u,ru.pb);
     rd();var K=combos(),qa=$('qa').value,h='',cur=null;
-    if(!isSingle(K))K.forEach(function(k){if(k[0]&&k[0]!==cur){cur=k[0];h+='<div class="gh">'+esc(k[0])+'</div>'}h+='<label><b>'+esc(k[1]||k[0])+'</b><input type="number" inputmode="numeric" placeholder="0" data-q="'+esc(k[0]+'|'+k[1])+'"></label>'});
+    // в пачке размеры у всех цветов одни и те же — строка подписана только цветом
+    if(!isSingle(K))K.forEach(function(k){if(!P&&k[0]&&k[0]!==cur){cur=k[0];h+='<div class="gh">'+esc(k[0])+'</div>'}h+='<label><b>'+esc(P?k[0]:(k[1]||k[0]))+'</b><input type="number" inputmode="numeric" placeholder="0" data-q="'+esc(k[0]+'|'+k[1])+'"></label>'});
     $('qg').innerHTML=h;
     [].forEach.call(document.querySelectorAll('[data-q]'),function(i){var k=i.dataset.q;i.value=qm[k]!=null?qm[k]:qa;qm[k]=i.value;i.oninput=function(){qm[k]=i.value}});
+    ppx();
   }
   if(isNew){
     var pc=(d.color||'').toLowerCase(),hit=false;
@@ -385,6 +397,7 @@ function form(it,pre){
     [].forEach.call(document.querySelectorAll('#sw .chip'),function(c){c.onclick=function(){c.classList.toggle('on');grid()}});
     $('sz').oninput=grid;$('cl').oninput=grid;
     $('qa').oninput=function(){var v=this.value;[].forEach.call(document.querySelectorAll('[data-q]'),function(i){i.value=v;qm[i.dataset.q]=v})};
+    $('pr').oninput=$('fk1').oninput=$('fk2').oninput=ppx;
     grid();
   }else{
     function mark(){var v=$('cl').value.trim().toLowerCase();[].forEach.call(CH,function(c){c.classList.toggle('on',c.dataset.col.toLowerCase()===v)})}
@@ -395,7 +408,8 @@ function form(it,pre){
     var nm=$('nm').value.trim();if(!nm){toast('⚠️ Введите название товара');$('nm').style.borderColor='var(--out)';$('nm').focus();return}
     var c=$('ct').value,pr=parseFloat($('pr').value)||0;
     if(it){it.name=nm;it.cat=c;it.color=$('cl').value.trim();it.price=pr;it.size=nz($('sz').value.trim());var ru=readUnit('f');it.u=ru.u;it.pk=ru.pk;it.pb=ru.pb;it.eb=ME?ME.name:'';it.ed=Date.now();save();close();logAct('изменил товар «'+nm+'»');render();return}
-    this.disabled=true;var RU=readUnit('f');rd();var K=combos(),qa=parseInt($('qa').value,10)||0,single=isSingle(K);
+    this.disabled=true;var RU=readUnit('f');rd();var K=combos(),qa=parseInt($('qa').value,10)||0,single=isSingle(K),NZ=gs().length;
+    if(RU.u==='пачка'&&NZ)RU.pk=[NZ,NZ];
     K.forEach(function(k){
       var n=single?qa:(parseInt(qm[k[0]+'|'+k[1]],10)||0);
       var ex=S.items.filter(function(i){return i.name.toLowerCase()===nm.toLowerCase()&&i.cat===c&&(i.color||'')===k[0]&&(i.size||'')===k[1]})[0];
