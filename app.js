@@ -90,6 +90,9 @@ function actSnap(sn){
   L.forEach(function(d){if(!actSeen[d._id]){actSeen[d._id]=1;if(!first&&(myId?d.uid!==myId:(!ME||d.by!==ME.name))&&!$('ov').innerHTML)toast('👤 '+d.by+': '+d.txt)}});
   actList=L;if(ME&&mystatus()==='active'){nav();if(tab==='team'&&!$('ov').innerHTML)team()}
 }
+function staffSnap(sn){
+  staff=sn.docs.map(function(x){var d=JSON.parse(JSON.stringify(x.data()));d._id=x.id;return d});var my=staff.filter(function(x){return x._id===myId})[0];if(my)isOwn=!!my.owner;restore();var st=mystatus();if(st!==lastSt){lastSt=st;if(ME&&!$('ov').innerHTML)render()}else if(tab==='team'&&ME&&!$('ov').innerHTML)render()
+}
 function setSt(id,st){
   var x=staff.filter(function(y){return y._id===id})[0];if(!x||!sdb)return;
   sdb.doc('staff/'+id).update({status:st}).then(function(){logAct((st==='active'?'разрешил доступ: ':'закрыл доступ: ')+x.name);toast(st==='active'?'✓ Доступ разрешён: '+x.name:'⛔ Доступ закрыт: '+x.name)},function(){toast('⚠️ Не удалось изменить доступ')});
@@ -107,7 +110,7 @@ function remote(d,v){
   if(!window.skladBackend)return;
   skladBackend.db().then(function(db){
     if(!db)return;dbd=db.doc('warehouse/main');sdb=db;who().then(function(){reg();restore()});ddb=db.doc('warehouse/debts');ddb.onSnapshot(dsnap,function(){});
-    db.collection('staff').onSnapshot(function(sn){staff=sn.docs.map(function(x){var d=JSON.parse(JSON.stringify(x.data()));d._id=x.id;return d});var my=staff.filter(function(x){return x._id===myId})[0];if(my)isOwn=!!my.owner;restore();var st=mystatus();if(st!==lastSt){lastSt=st;if(ME&&!$('ov').innerHTML)render()}else if(tab==='team'&&ME&&!$('ov').innerHTML)render()},function(){});
+    db.collection('staff').onSnapshot(staffSnap,function(){});
     db.collection('activity').orderBy('t','desc').limit(100).onSnapshot(actSnap,function(){});
     dbd.onSnapshot(function(s){
       if(!s.exists){if(S.items.length){dirtyMain=true;LSS('skladgo.dirty.main','1');push()}else if(!$('ov').innerHTML)render();return}
@@ -1117,7 +1120,9 @@ function gate(edit){
     reg();render();
   };
 }
-function render(){if(!ME){gate();return}var st=mystatus();if(st==='pending'||st==='blocked'){wait(st);return}nav();(tab==='stock'?stock:tab==='hist'?hist:tab==='debt'?debt:tab==='bot'?botTab:team)()}
+// lastSt — статус, который сейчас на экране. Форма регистрации рисует «ожидайте» сама, мимо
+// списка команды; не запомни мы это — пришедшее «вы хозяин» выглядело бы как «ничего не изменилось»
+function render(){if(!ME){gate();return}var st=mystatus();lastSt=st;if(st==='pending'||st==='blocked'){wait(st);return}nav();(tab==='stock'?stock:tab==='hist'?hist:tab==='debt'?debt:tab==='bot'?botTab:team)()}
 window.addEventListener('error',function(e){toast('⚠️ Ошибка: '+e.message)});
 $('fab').onclick=function(){if(tab==='debt')dform('give');else form(null)};
 render();
