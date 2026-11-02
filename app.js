@@ -164,7 +164,10 @@ var NI=(function(){
   };
 })();
 function nav(){
-  $('nav').innerHTML=[['stock',NI.stock,'Склад'],['hist',NI.hist,'История'],['debt',NI.debt,'Долги'],['team',NI.team,'Команда'],['bot',NI.bot,'Бот']].filter(function(x){return !(x[0]==='bot'&&window.NO_BOT)}).map(function(x){return '<button class="'+(tab===x[0]?'on':'')+'" data-t="'+x[0]+'"><b>'+x[1]+'</b>'+x[2]+(x[0]==='team'&&tab!=='team'&&nbadge()?'<span class="nb">'+nbadge()+'</span>':'')+'</button>'}).join('');
+  // Помощнику нужен Claude (window.claude). На обычном сайте его нет — вкладка только отвечала бы «недоступен»
+  var T=[['stock',NI.stock,'Склад'],['hist',NI.hist,'История'],['debt',NI.debt,'Долги'],['team',NI.team,'Команда'],['bot',NI.bot,'Бот']].filter(function(x){return !(x[0]==='bot'&&(window.NO_BOT||!window.claude))});
+  $('nav').style.gridTemplateColumns='repeat('+T.length+',1fr)';
+  $('nav').innerHTML=T.map(function(x){return '<button class="'+(tab===x[0]?'on':'')+'" data-t="'+x[0]+'"><b>'+x[1]+'</b>'+x[2]+(x[0]==='team'&&tab!=='team'&&nbadge()?'<span class="nb">'+nbadge()+'</span>':'')+'</button>'}).join('');
   [].forEach.call($('nav').children,function(b){b.onclick=function(){var was=tab;tab=b.dataset.t;if(tab!=='stock'&&was==='stock'&&!tabHs){try{history.pushState({sg:2},'');tabHs=1}catch(e){}}else if(tab==='stock'&&tabHs){tabHs=0;skipPop++;try{history.back()}catch(e){skipPop=0}}render()}});
   $('fab').style.display=(tab==='stock'||tab==='debt')?'block':'none';
 }
