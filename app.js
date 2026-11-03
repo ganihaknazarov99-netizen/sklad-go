@@ -1133,13 +1133,14 @@ var CODES=[['+992','🇹🇯 TJ'],['+7','🇷🇺 RU/KZ'],['+998','🇺🇿 UZ']
 function nbadge(){return actList.filter(function(a){return a.t>seenT&&(myId?a.uid!==myId:true)}).length+(isOwn?staff.filter(function(x){return x.status==='pending'}).length:0)}
 function wait(st){
   $('nav').innerHTML='';$('fab').style.display='none';
-  $('app').innerHTML='<h1>'+LOGO+'</h1><div class="empty" style="padding-top:50px"><div style="font-size:46px">'+(st==='blocked'?'⛔':'⏳')+'</div><b style="color:var(--tx);font-size:19px">'+(st==='blocked'?'Доступ закрыт владельцем':'Ожидайте подтверждения')+'</b><br><br>'+(st==='blocked'?'Обратитесь к владельцу склада.':'Владелец склада должен разрешить вам доступ. Как только он нажмёт «Разрешить», программа откроется сама.')+'</div><button class="link" id="rt" style="display:block;margin:0 auto">Проверить снова</button>'+(window.skladAuth?'<button class="link" id="lo" style="display:block;margin:14px auto 0">Выйти из аккаунта</button>':'');
+  $('app').innerHTML='<h1>'+LOGO+'</h1><div class="empty" style="padding-top:50px"><div style="font-size:46px">'+(st==='blocked'?'⛔':'⏳')+'</div><b style="color:var(--tx);font-size:19px">'+(st==='blocked'?'Доступ закрыт владельцем':'Ожидайте подтверждения')+'</b><br><br>'+(st==='blocked'?'Обратитесь к владельцу склада.':'Владелец склада должен разрешить вам доступ. Как только он нажмёт «Разрешить», программа откроется сама.')+'</div><button class="link" id="rt" style="display:block;margin:0 auto">Проверить снова</button>'+(window.skladAuth?'<button class="link" id="swa" style="display:block;margin:14px auto 0">🔄 Сменить аккаунт</button><button class="link" id="lo" style="display:block;margin:14px auto 0">Выйти из аккаунта</button>':'');
   $('rt').onclick=render;if($('lo'))$('lo').onclick=function(){window.skladAuth.signOut()};
+  if($('swa'))$('swa').onclick=function(){window.skladAuth.switchAccount()};   // вошёл не тем Gmail — сразу к выбору аккаунта
 }
 function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h='<h1>Команда</h1><div class="card"><div class="info"><b>'+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?'Владелец · ':'Сотрудник · ')+esc(ME.phone)+' · '+esc(ME.mail)+'</small></div><button class="link" id="me">Изменить</button></div>';
-  if(window.skladAuth)h+='<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>'+(isOwn?'':'<button class="link del" id="da">🗑 Удалить мой аккаунт</button>')+'</div>';
+  if(window.skladAuth)h+='<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px"><button class="link" id="lo">Выйти</button><button class="link" id="swa">🔄 Сменить аккаунт</button>'+(isOwn?'':'<button class="link del" id="da">🗑 Удалить мой аккаунт</button>')+'</div>';
   // Значок на экране телефона. Android и компьютер предлагают установку сами (backend.js ловит это),
   // на iPhone такой кнопки нет — подсказываем, куда нажать
   if(window.skladInstall)h+='<button class="go ac" id="ins" style="margin:6px 0 10px">📲 Установить Sklad Go на телефон</button>';
@@ -1161,6 +1162,7 @@ function team(){
   if(window.SkladTheme)bindChips('th',function(v){window.SkladTheme.set(v);render()});
   if(window.setLang)bindChips('lg',function(v){if(v!==window.SKLAD_LANG)window.setLang(v)});
   if($('lo'))$('lo').onclick=function(){if(anyDirty()&&this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Не всё отправлено! Нажмите ещё раз — выйти и потерять';return}window.skladAuth.signOut()};
+  if($('swa'))$('swa').onclick=function(){if(anyDirty()&&this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Не всё отправлено! Нажмите ещё раз — сменить и потерять';return}window.skladAuth.switchAccount()};
   if($('da'))$('da').onclick=function(){
     open('<h2>Удалить аккаунт</h2><small style="margin:4px 0 10px">Вы выйдете из программы, и для возврата владельцу придётся заново подтвердить доступ. Данные склада и долгов останутся. Впишите слово <b data-notr>удалить</b> для подтверждения.</small><input id="dpw" data-notr placeholder="удалить" autocapitalize="none"><button class="go ac" id="dok" style="background:var(--out)">Удалить навсегда</button>');
     $('dok').onclick=function(){
