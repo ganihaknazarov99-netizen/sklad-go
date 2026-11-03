@@ -91,7 +91,7 @@ function actSnap(sn){
   actList=L;if(ME&&mystatus()==='active'){nav();if(tab==='team'&&!$('ov').innerHTML)team()}
 }
 function staffSnap(sn){
-  staff=sn.docs.map(function(x){var d=JSON.parse(JSON.stringify(x.data()));d._id=x.id;return d});var my=staff.filter(function(x){return x._id===myId})[0];if(my)isOwn=!!my.owner;restore();var st=mystatus();if(st!==lastSt){lastSt=st;if(ME&&!$('ov').innerHTML)render()}else if(tab==='team'&&ME&&!$('ov').innerHTML)render()
+  staff=sn.docs.map(function(x){var d=JSON.parse(JSON.stringify(x.data()));d._id=x.id;return d});var my=staff.filter(function(x){return x._id===myId})[0];if(my)isOwn=!!my.owner;cpLoad();restore();var st=mystatus();if(st!==lastSt){lastSt=st;if(ME&&!$('ov').innerHTML)render()}else if(tab==='team'&&ME&&!$('ov').innerHTML)render()
 }
 function setSt(id,st){
   var x=staff.filter(function(y){return y._id===id})[0];if(!x||!sdb)return;
@@ -109,7 +109,7 @@ function remote(d,v){
 (function(){
   if(!window.skladBackend)return;
   skladBackend.db().then(function(db){
-    if(!db)return;dbd=db.doc('warehouse/main');sdb=db;who().then(function(){reg();restore()});ddb=db.doc('warehouse/debts');ddb.onSnapshot(dsnap,function(){});
+    if(!db)return;dbd=db.doc('warehouse/main');sdb=db;who().then(function(){reg();restore();cpLoad()});ddb=db.doc('warehouse/debts');ddb.onSnapshot(dsnap,function(){});
     db.collection('staff').onSnapshot(staffSnap,function(){});
     db.collection('activity').orderBy('t','desc').limit(100).onSnapshot(actSnap,function(){});
     dbd.onSnapshot(function(s){
@@ -177,6 +177,25 @@ function uOf(i){return i&&i.u==='пачка'?'пачка':'шт'}
 // только на флаг ar, а его ставил лишь переход «было > 0 → стало 0», и товар, заведённый с нулём, висел в списке
 function gone(i){return !(i.qty>0)}
 function tov(n){var a=n%100,b=n%10;return n+' '+(a>10&&a<20?'товаров':b===1?'товар':b>=2&&b<=4?'товара':'товаров')}
+// Закупочные цены — отдельный документ 'costs', база отдаёт его только хозяину (supabase/schema.sql).
+// В самом складе их держать нельзя: склад уходит каждому продавцу целиком. Цена закупки — за ту же
+// единицу, что и цена продажи (у пачки с ценой за штуку — за штуку)
+var CP={},cdb=null;try{CP=JSON.parse(localStorage.getItem('skladgo.costs'))||{}}catch(e){}
+function cpOf(i){return isOwn&&i?(+CP[i.id]||0):0}
+function cfOf(i){return cpOf(i)*((uOf(i)==='пачка'&&i.pb!=='pack')?pcs(i):1)}
+function cpLoad(){
+  if(!isOwn||!sdb||cdb)return;cdb=sdb.doc('warehouse/costs');
+  cdb.onSnapshot(function(s){var d=s.exists&&s.data();CP=(d&&d.items)||{};try{localStorage.setItem('skladgo.costs',JSON.stringify(CP))}catch(e){}if(ME&&!$('ov').innerHTML)render()},function(){});
+}
+function cpSet(ch){   // ch: {id товара: цена закупки, 0 — убрать}
+  var ap=function(o){Object.keys(ch).forEach(function(k){if(ch[k]>0)o[k]=ch[k];else delete o[k]});return o};
+  ap(CP);try{localStorage.setItem('skladgo.costs',JSON.stringify(CP))}catch(e){}
+  if(!cdb)return;
+  (function put(n){cdb.get().then(function(s){var d=s.exists&&s.data();return cdb.set({items:ap((d&&d.items)||{})},{ifMatch:s.exists?s.version:null})}).catch(function(e){if(e&&e.code==='version_conflict'&&n<3)put(n+1);else toast('⚠️ Закупочные цены не сохранились: '+((e&&e.message)||'нет связи'))})})(0);
+}
+// Прибыль по продажам: выручка минус закупка. Продажи товаров без закупочной цены не считаем — и честно пишем, сколько их
+function profit(L){var r={p:0,rev:0,cost:0,miss:0};L.forEach(function(l){if(l.type!=='out')return;var it=find(l.id),c=it?cfOf(it):0;if(!c){r.miss++;return}r.rev+=l.sum||0;r.cost+=c*l.qty;r.p+=(l.sum||0)-c*l.qty});return r}
+function profTxt(r){return r.miss?' · без закупки: '+r.miss+' прод.':''}
 function delItems(L){
   var t=Date.now(),ids={};L.forEach(function(i){ids[i.id]=1});
   S.trash=(S.trash||[]).concat(L.map(function(i){return {id:uid(),k:'item',t:t,by:ME?ME.name:'',item:i}})).slice(-100);
@@ -195,6 +214,7 @@ function vOf(i){return pf(i)*i.qty}
 function pTxt(i){return money(i.price)+(uOf(i)==='пачка'?(i.pb==='pack'?'/пачка':'/шт'):'')}
 function needPk(i){return uOf(i)==='пачка'&&i.pb!=='pack'&&!(i.pk&&i.pk[0]>0)}
 function priceHint(u,pb){return 'Цена, сом (за 1 '+(u!=='пачка'?'шт':pb==='pack'?'пачку':'штуку')+')'}
+function cpHint(u,pb){return 'Почём купили'+priceHint(u,pb).slice(4)}
 // nw — форма нового товара: там цена всегда за штуку, а штук в пачке столько, сколько выбрано размеров.
 // Выбор «за пачку» остаётся, только если товар копируют с того, где цена уже за пачку
 function unitBlock(px,u,pk,pb,nw){return '<div class="lbl">Единица учёта</div><div class="wrap" id="'+px+'uw"><div class="chip'+(u!=='пачка'?' on':'')+'" data-u="шт">шт</div><div class="chip'+(u==='пачка'?' on':'')+'" data-u="пачка">пачка</div></div><div id="'+px+'pb" style="display:'+(u==='пачка'?'block':'none')+'">'+(nw?'<div class="lbl" id="'+px+'pn" style="display:none"></div>':'')+'<div id="'+px+'kk"><div class="lbl">Штук в пачке — от и до (можно заполнить позже)</div><div class="row"><input id="'+px+'k1" type="number" inputmode="numeric" placeholder="от, напр. 4" value="'+((pk&&pk[0])||'')+'"><input id="'+px+'k2" type="number" inputmode="numeric" placeholder="до, напр. 5" value="'+((pk&&pk[1])||'')+'"></div></div>'+(nw&&pb!=='pack'?'':'<div class="lbl">Цена указана за</div><div class="wrap" id="'+px+'bw"><div class="chip'+(pb!=='pack'?' on':'')+'" data-b="piece">1 штуку</div><div class="chip'+(pb==='pack'?' on':'')+'" data-b="pack">1 пачку</div></div>')+'</div>'}
@@ -210,13 +230,17 @@ function cardHtml(i,sub,ax){
   return '<div class="card'+(sub?' sm':'')+'"><div class="info" data-o="'+i.id+'"><b>'+(sub?esc(i.size||'без размера'):esc(i.name))+'</b>'+(sub?'':'<small>'+((i.size||i.color)?[i.size,i.color].filter(Boolean).map(esc).join(' · '):esc(i.cat))+(i.price?' · '+pTxt(i):'')+'</small>')+'</div><div class="ctl">'+(ax?'<button class="m" data-x="'+i.id+'">🗑<i>удалить</i></button>':'<button class="m" data-m="'+i.id+'"'+(i.qty<1?' disabled':'')+'>−<i>продал</i></button>')+'<span class="q'+(i.qty<=3?' low':'')+'" data-qs="'+i.id+'">'+i.qty+'</span><button class="p" data-p="'+i.id+'">＋<i>привёз</i></button></div></div>';
 }
 function valueSheet(){
-  var by={},tv=0,tp=0,np=[],cents=0;
+  var by={},tv=0,tp=0,np=[],cents=0,ck=0,cv=0,cn=0;
   S.items.forEach(function(i){
     if(!(i.qty>0))return;var v=Math.round(vOf(i)*100);
     var c=by[i.cat]||(by[i.cat]={v:0,q:0,n:0});c.v+=v;c.q+=i.qty;(c.it=c.it||[]).push(i);c.n++;tv+=v;tp+=i.qty;
     if(!i.price)np.push(i);
+    if(cfOf(i)){ck+=cfOf(i)*i.qty;cv+=vOf(i)}else cn++;
   });
-  var h='<h2>💰 Стоимость склада</h2><div style="font-size:30px;font-weight:800;margin:6px 0 2px">'+money(tv/100)+'</div><small>'+unitsTxt(S.items)+' в наличии · цена × количество по каждой позиции</small><div class="lbl" style="margin-top:14px">По категориям</div>';
+  var h='<h2>💰 Стоимость склада</h2><div style="font-size:30px;font-weight:800;margin:6px 0 2px">'+money(tv/100)+'</div><small>'+unitsTxt(S.items)+' в наличии · цена × количество по каждой позиции</small>';
+  // хозяину — во что склад обошёлся и сколько на нём заработать, если продать всё по нынешним ценам
+  if(isOwn&&ck)h+='<div class="prop" style="max-width:100%;margin-top:10px"><b>По закупке: '+money(ck)+'</b><br><small>Продадите всё по нынешним ценам — заработаете <b class="i">'+money(cv-ck)+'</b>'+(cn?'. Без закупочной цены: '+cn+' вариантов — их здесь нет':'')+'. Видите только вы.</small></div>';
+  h+='<div class="lbl" style="margin-top:14px">По категориям</div>';
   h+=Object.keys(by).sort(function(a,b){return by[b].v-by[a].v}).map(function(k){var c=by[k];return '<div class="log"><div><b>'+esc(k)+'</b><small>'+c.n+' вариантов (цвет/размер) · '+unitsTxt(c.it)+'</small></div><b>'+money(c.v/100)+'</b></div>'}).join('');
   if(!Object.keys(by).length)h+='<div class="empty">На складе пока ничего нет</div>';
   if(np.length)h+='<div class="prop" style="max-width:100%;margin-top:10px;border-color:var(--out)"><b>⚠️ Без цены: '+np.length+' вариантов ('+np.reduce(function(a,i){return a+i.qty},0)+' шт)</b><br><small>Они в сумму не вошли. Укажите цену (✏️ Изменить), и стоимость станет точной.</small><div style="margin-top:6px;font-size:14px">'+np.slice(0,12).map(function(i){return esc(lab(i))+' — '+i.qty+' шт'}).join('<br>')+(np.length>12?'<br>…и ещё '+(np.length-12):'')+'</div></div>';
@@ -229,12 +253,13 @@ function folderTools(k){
 }
 function folderEdit(k){
   var g=S.items.filter(function(i){return (i.name+'|'+i.cat).toLowerCase()===k});if(!g.length)return;var f=g[0];
-  open('<h2>✏️ Изменить папку</h2><small style="margin:4px 0 10px">Изменения применятся ко всем вариантам: '+g.length+' шт.</small><input id="fn" placeholder="Название" value="'+esc(f.name)+'"><select id="fc">'+S.cats.map(function(c){return '<option'+(c===f.cat?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select><input id="fp" type="number" inputmode="decimal" placeholder="Цена, сом (для всех)" value="'+(f.price||'')+'">'+unitBlock('g',f.u,f.pk,f.pb)+'<button class="go ac" id="fs">Сохранить для всех</button><button class="link del" id="fd">🗑 Удалить всю папку</button>');
+  open('<h2>✏️ Изменить папку</h2><small style="margin:4px 0 10px">Изменения применятся ко всем вариантам: '+g.length+' шт.</small><input id="fn" placeholder="Название" value="'+esc(f.name)+'"><select id="fc">'+S.cats.map(function(c){return '<option'+(c===f.cat?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select><input id="fp" type="number" inputmode="decimal" placeholder="Цена, сом (для всех)" value="'+(f.price||'')+'">'+(isOwn?'<input id="fcp" type="number" inputmode="decimal" placeholder="Почём купили, сом (для всех) — видите только вы" value="'+(cpOf(f)||'')+'">':'')+unitBlock('g',f.u,f.pk,f.pb)+'<button class="go ac" id="fs">Сохранить для всех</button><button class="link del" id="fd">🗑 Удалить всю папку</button>');
   bindUnit('g');
   $('fs').onclick=function(){
     var nm=$('fn').value.trim();if(!nm){toast('⚠️ Введите название');return}
     var c=$('fc').value,pv=$('fp').value,pr=parseFloat(pv);
     var ru=readUnit('g');g.forEach(function(i){i.name=nm;i.cat=c;i.u=ru.u;i.pk=ru.pk;i.pb=ru.pb;if(pv!==''&&!isNaN(pr))i.price=pr;i.eb=ME?ME.name:'';i.ed=Date.now()});
+    var cv=$('fcp')?parseFloat($('fcp').value):NaN;if(cv>0){var cps={};g.forEach(function(i){cps[i.id]=cv});cpSet(cps)}   // как у цены: пустое поле ничего не стирает
     delete fo[k];fo[(nm+'|'+c).toLowerCase()]=true;
     save();close();toast('✓ Папка обновлена: '+g.length+' вариантов');logAct('изменил папку «'+nm+'»');render();
   };
@@ -283,7 +308,7 @@ function stock(){
     var t=e.target.closest('[data-m],[data-p],[data-o],[data-f],[data-qs],[data-fa],[data-sv],[data-x]');if(!t)return;
     if(t.dataset.sv){valueSheet();return}
     if(t.dataset.x){if(t.dataset.ok!=='1'){t.dataset.ok='1';t.innerHTML='❗<i>точно?</i>';return}var dx=find(t.dataset.x);if(dx)delItems([dx]);return}
-    if(t.dataset.fa){var kk=t.dataset.fk;if(t.dataset.fa==='add'){var f0=S.items.filter(function(i){return (i.name+'|'+i.cat).toLowerCase()===kk})[0];if(f0)form(null,{name:f0.name,cat:f0.cat,price:f0.price,u:f0.u,pk:f0.pk,pb:f0.pb})}else folderEdit(kk);return}
+    if(t.dataset.fa){var kk=t.dataset.fk;if(t.dataset.fa==='add'){var f0=S.items.filter(function(i){return (i.name+'|'+i.cat).toLowerCase()===kk})[0];if(f0)form(null,{name:f0.name,cat:f0.cat,price:f0.price,u:f0.u,pk:f0.pk,pb:f0.pb,cpv:cpOf(f0)})}else folderEdit(kk);return}
     if(t.dataset.qs){sheet(t.dataset.qs);if($('fx'))$('fx').click();return}
     if(t.dataset.f!==undefined){var k=t.dataset.f,cur=fo[k]!==undefined?fo[k]:q.length>0;fo[k]=!cur;stock();return}
     if(t.dataset.m){apply(find(t.dataset.m),'out',1);stock()}
@@ -311,7 +336,7 @@ function open(html){
 }
 function sheet(id){
   var it=find(id);if(!it)return;
-  open('<h2>'+esc(it.name)+'</h2><small>'+meta(it)+(it.price?' · '+pTxt(it):'')+' · на складе: <b>'+qt(it.qty,uOf(it))+'</b>'+(estTxt([it])?' ('+estTxt([it])+')':'')+'</small><small>'+itwho(it)+'</small><div class="step"><button id="dm">−</button><input id="n" type="number" inputmode="numeric" value="1" min="1"><button id="dp">＋</button></div><div class="nums">'+[1,5,10,20].map(function(x){return '<button data-n="'+x+'">'+x+'</button>'}).join('')+'</div><input id="nt" placeholder="Заметка: поставщик / покупатель (необязательно)"><div class="two"><button class="go out" id="so">− Продал</button><button class="go in" id="si">＋ Привёз</button></div><button class="go" id="sd" style="background:#7c3aed;margin-top:8px;width:100%">💳 Продать в долг клиенту</button><div class="tools"><button id="fx">⚖ Пересчёт</button><button id="ed">✏️ Изменить</button><button id="cp">⧉ Другой размер</button><button class="del" id="dl">🗑 Удалить</button></div>');
+  open('<h2>'+esc(it.name)+'</h2><small>'+meta(it)+(it.price?' · '+pTxt(it):'')+' · на складе: <b>'+qt(it.qty,uOf(it))+'</b>'+(estTxt([it])?' ('+estTxt([it])+')':'')+'</small>'+(cpOf(it)?'<small>Закупка '+money(cpOf(it))+(it.price?' · наценка <b class="i">'+money(it.price-cpOf(it))+'</b>':'')+' · видите только вы</small>':'')+'<small>'+itwho(it)+'</small><div class="step"><button id="dm">−</button><input id="n" type="number" inputmode="numeric" value="1" min="1"><button id="dp">＋</button></div><div class="nums">'+[1,5,10,20].map(function(x){return '<button data-n="'+x+'">'+x+'</button>'}).join('')+'</div><input id="nt" placeholder="Заметка: поставщик / покупатель (необязательно)"><div class="two"><button class="go out" id="so">− Продал</button><button class="go in" id="si">＋ Привёз</button></div><button class="go" id="sd" style="background:#7c3aed;margin-top:8px;width:100%">💳 Продать в долг клиенту</button><div class="tools"><button id="fx">⚖ Пересчёт</button><button id="ed">✏️ Изменить</button><button id="cp">⧉ Другой размер</button><button class="del" id="dl">🗑 Удалить</button></div>');
   function n(){return Math.max(1,parseInt($('n').value,10)||1)}
   $('dm').onclick=function(){$('n').value=Math.max(1,n()-1)};$('dp').onclick=function(){$('n').value=n()+1};
   [].forEach.call(document.querySelectorAll('[data-n]'),function(b){b.onclick=function(){$('n').value=b.dataset.n}});
@@ -344,7 +369,7 @@ function sheet(id){
     };
   };
   $('ed').onclick=function(){form(it)};
-  $('cp').onclick=function(){form(null,{name:it.name,cat:it.cat,color:it.color,price:it.price,u:it.u,pk:it.pk,pb:it.pb})};
+  $('cp').onclick=function(){form(null,{name:it.name,cat:it.cat,color:it.color,price:it.price,u:it.u,pk:it.pk,pb:it.pb,cpv:cpOf(it)})};
   $('dl').onclick=function(){
     if(this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Нажмите ещё раз — удалить';return}
     close();delItems([it]);
@@ -379,9 +404,10 @@ function form(it,pre){
   h+='<div class="lbl">'+(isNew?'Цвета — нажмите нужные (можно несколько)':'Цвет')+'</div><div class="wrap" id="cw">'+COL.map(function(c){return '<div class="chip" data-col="'+c[0]+'"><i style="background:'+c[1]+'"></i>'+c[0]+'</div>'}).join('')+'</div><input id="cl" placeholder="'+(isNew?'Другие цвета через запятую':'Или впишите свой цвет')+'" value="'+(isNew?'':esc(d.color||''))+'">';
   if(isNew)h+='<div class="lbl" id="szl">Размеры — нажмите нужные</div><div class="wrap" id="sw">'+SC.map(function(x){return '<div class="chip" data-s="'+x+'">'+x+'</div>'}).join('')+'</div><input id="sz" placeholder="Или впишите: L, XL, XXL · M-XXXL · L-2XL"><div class="lbl" id="qal">Сколько штук</div><input id="qa" type="number" inputmode="numeric" placeholder="Одинаково на все цвета и размеры"><div class="qg" id="qg"></div>';
   else h+='<input id="sz" placeholder="Размер" value="'+esc(it.size)+'">';
-  h+=unitBlock('f',d.u,d.pk,d.pb,isNew)+(isNew?'<div class="lbl" id="prl"></div>':'')+'<input id="pr" type="number" inputmode="decimal" placeholder="'+priceHint(d.u==='пачка'?'пачка':'шт',d.pb)+'" value="'+(d.price||'')+'">'+(isNew?'<small id="pp" style="margin:-4px 0 10px"></small>':'')+'<button class="go ac" id="sv">Сохранить</button>';
+  h+=unitBlock('f',d.u,d.pk,d.pb,isNew)+'<div class="lbl" id="prl">'+priceHint(d.u==='пачка'?'пачка':'шт',d.pb)+'</div><input id="pr" type="number" inputmode="decimal" placeholder="'+priceHint(d.u==='пачка'?'пачка':'шт',d.pb)+'" value="'+(d.price||'')+'">'+(isNew?'<small id="pp" style="margin:-4px 0 10px"></small>':'')+(isOwn?'<div class="lbl">Закупочная цена — видите только вы</div><input id="cpi" type="number" inputmode="decimal" placeholder="'+cpHint(d.u==='пачка'?'пачка':'шт',d.pb)+'" value="'+((it?cpOf(it):d.cpv)||'')+'"><small id="mg" style="margin:-4px 0 10px"></small>':'')+'<button class="go ac" id="sv">Сохранить</button>';
   open(h);
-  bindUnit('f',function(){var r=readUnit('f');$('pr').placeholder=priceHint(r.u,r.pb);if(isNew)grid()});
+  bindUnit('f',function(){var r=readUnit('f');$('pr').placeholder=$('prl').textContent=priceHint(r.u,r.pb);if($('cpi'))$('cpi').placeholder=cpHint(r.u,r.pb);if(isNew)grid()});
+  if($('cpi')){var mgx=function(){var p=parseFloat($('pr').value)||0,cv=parseFloat($('cpi').value)||0;$('mg').textContent=(p&&cv)?'Наценка: '+(p>=cv?'+':'')+money(p-cv)+' ('+Math.round((p-cv)/cv*100)+'%)':''};$('cpi').oninput=mgx;$('pr').addEventListener('input',mgx);mgx()}
   var CH=document.querySelectorAll('#cw .chip');
   $('ct').onchange=function(){if(this.value!=='+')return;var self=this;self.selectedIndex=0;if($('ncr'))return;var d=document.createElement('div');d.id='ncr';d.className='row';d.innerHTML='<input id="nci" placeholder="Название категории"><button class="go ac" id="ncb" style="padding:10px">Добавить</button>';self.after(d);$('nci').focus();$('ncb').onclick=function(){var c=$('nci').value.trim();if(!c)return;S.cats.push(c);save();var o=document.createElement('option');o.textContent=c;self.insertBefore(o,self.lastChild);self.value=c;d.remove()}};
   function rd(){[].forEach.call(document.querySelectorAll('[data-q]'),function(i){qm[i.dataset.q]=i.value})}
@@ -421,7 +447,8 @@ function form(it,pre){
   }
   $('sv').onclick=function(){
     var nm=$('nm').value.trim();if(!nm){toast('⚠️ Введите название товара');$('nm').style.borderColor='var(--out)';$('nm').focus();return}
-    var c=$('ct').value,pr=parseFloat($('pr').value)||0;
+    var c=$('ct').value,pr=parseFloat($('pr').value)||0,cv=$('cpi')?parseFloat($('cpi').value)||0:-1,cps={};
+    if(it&&cv>=0){cps[it.id]=cv;cpSet(cps)}
     if(it){it.name=nm;it.cat=c;it.color=$('cl').value.trim();it.price=pr;it.size=nz($('sz').value.trim());var ru=readUnit('f');it.u=ru.u;it.pk=ru.pk;it.pb=ru.pb;it.eb=ME?ME.name:'';it.ed=Date.now();save();close();logAct('изменил товар «'+nm+'»');render();return}
     this.disabled=true;var RU=readUnit('f');rd();var K=combos(),qa=parseInt($('qa').value,10)||0,single=isSingle(K),NZ=gs().length;
     if(RU.u==='пачка'&&NZ)RU.pk=[NZ,NZ];
@@ -429,9 +456,10 @@ function form(it,pre){
     K.forEach(function(k){
       var n=single?qa:(parseInt(qm[k[0]+'|'+k[1]],10)||0);
       var ex=S.items.filter(function(i){return i.name.toLowerCase()===nm.toLowerCase()&&i.cat===c&&(i.color||'')===k[0]&&(i.size||'')===k[1]})[0];
-      if(ex){if(n>0)apply(ex,'in',n,'Привёз (в папку)');return}
-      var x={id:uid(),name:nm,cat:c,size:k[1],color:k[0],price:pr,qty:0,ar:true,u:RU.u,pk:RU.pk,pb:RU.pb,ab:ME?ME.name:'',ad:Date.now()};S.items.push(x);if(n>0)apply(x,'in',n,'Начальный остаток');else z++;
+      if(ex){if(cv>0)cps[ex.id]=cv;if(n>0)apply(ex,'in',n,'Привёз (в папку)');return}
+      var x={id:uid(),name:nm,cat:c,size:k[1],color:k[0],price:pr,qty:0,ar:true,u:RU.u,pk:RU.pk,pb:RU.pb,ab:ME?ME.name:'',ad:Date.now()};S.items.push(x);if(cv>0)cps[x.id]=cv;if(n>0)apply(x,'in',n,'Начальный остаток');else z++;
     });
+    if(Object.keys(cps).length)cpSet(cps);
     fo[(nm+'|'+c).toLowerCase()]=true;save();close();toast('Добавлено позиций: '+K.length+(z?' · без остатка ('+z+') — в 🗄 Архиве':''));logAct('добавил товар «'+nm+'» ('+K.length+' поз.)');render();
   };
   $('nm').focus();
@@ -463,6 +491,7 @@ function doRestore(d,rep){
   if(rep&&cats.length)S.cats=cats;else cats.forEach(function(c){if(S.cats.indexOf(c)<0)S.cats.push(c)});
   if(rep&&typeof cl.biz==='string')S.biz=cl.biz;
   S.items.forEach(function(i){if(i.ar===undefined)i.ar=i.qty<=0});
+  if(isOwn&&cl.costs&&typeof cl.costs==='object'){var cps={};Object.keys(cl.costs).forEach(function(k){var v=+cl.costs[k];if(v>0&&(rep||!CP[k]))cps[k]=v});if(Object.keys(cps).length)cpSet(cps)}
   var nd=0;
   if(cl.debts&&Array.isArray(cl.debts.people)&&Array.isArray(cl.debts.ops)){
     D.people=mergeList(D.people,cl.debts.people,rep,function(x){return x.id});D.ops=mergeList(D.ops,cl.debts.ops,rep,function(x){return x.id});dnorm(D);nd=cl.debts.people.length;
@@ -596,6 +625,7 @@ function wstats(){
   var h='<h1>История</h1>'+hseg()+chipsHtml('wsm',[['rev','Выручка'],['qty','Штуки']],wsMet)+chipsHtml('wsp',[[7,'7 дн.'],[30,'30 дн.'],[90,'90 дн.'],[365,'Год']],wsPer);
   h+='<div class="panel"><small>'+(wsMet==='rev'?'Продажи в день (в среднем)':'Продано штук в день (в среднем)')+'</small><div style="font-size:26px;font-weight:800;color:'+col+';margin-bottom:6px">'+(wsMet==='rev'?money(avg):(Math.round(avg*10)/10)+' шт')+'</div>'+lineSvg(pts,col)+(wsPer>120?'<small>по неделям</small>':'')+'</div>';
   h+='<div class="stats"><div class="stat s3"><b class="i">'+money(sum)+'</b><small>продано · '+mapTxt(sm)+'</small></div><div class="stat s3"><b>'+mapTxt(gm)+'</b><small>приход за период</small></div><div class="stat s3"><b class="'+(low?'o':'')+'">'+low+'</b><small>заканчивается (≤3 шт)</small></div><div class="stat s3"><b class="'+(np?'o':'')+'">'+np+'</b><small>без цены (не в стоимости)</small></div></div>';
+  if(isOwn){var pr0=profit(S.log.filter(function(l){return l.t>=start&&l.t<=end}));if(pr0.rev||pr0.miss)h+='<div class="panel"><h3>Прибыль за период</h3><div style="font-size:26px;font-weight:700;color:var(--in)">'+money(pr0.p)+'</div><small>выручка '+money(pr0.rev)+' − закупка '+money(pr0.cost)+profTxt(pr0)+' · видите только вы</small></div>'}
   h+='<div class="panel"><h3>Стоимость склада по категориям</h3>'+donutHtml(ci,'сом')+'</div>';
   h+='<div class="panel"><h3>Топ продаж за период</h3>'+(tk.length?tk.map(function(k){return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(k)+'</span><b>'+qt(top[k].q,top[k].u)+'</b></div><small>'+money(top[k].s)+'</small><div class="bar"><i style="width:'+Math.round(top[k].q/mx*100)+'%"></i></div></div>'}).join(''):'<div class="empty" style="padding:20px">За этот период продаж не было</div>')+'</div>';
   $('app').innerHTML=h;bindSeg();bindChips('wsm',function(v){wsMet=v;wstats()});bindChips('wsp',function(v){wsPer=v;wstats()});
@@ -616,7 +646,8 @@ function hist(){
   LG.forEach(function(l){if(l.type==='in')got+=l.qty;else if(l.type==='out'){sold+=l.qty;rev+=l.sum||0;top[l.name]=(top[l.name]||0)+l.qty}});
   var tp=Object.keys(top).sort(function(a,b){return top[b]-top[a]}).slice(0,5);
   var h='<h1>История</h1>'+hseg()+'<div class="chips" id="pc">'+[[1,'Сегодня'],[7,'7 дней'],[30,'30 дней'],[0,'Всё']].map(function(x){return '<div class="chip'+(hp===x[0]?' on':'')+'" data-d="'+x[0]+'">'+x[1]+'</div>'}).join('')+'</div>';
-  h+='<div class="stats"><div class="stat"><b>'+money(rev)+'</b><small>продано на сумму</small></div><div class="stat"><b><span class="o">−'+sold+'</span> · <span class="i">＋'+got+'</span></b><small>расход · приход, шт</small></div></div>';
+  var pf0=isOwn?profit(LG):null;
+  h+='<div class="stats"><div class="stat"><b>'+money(rev)+'</b><small>продано на сумму</small></div><div class="stat"><b><span class="o">−'+sold+'</span> · <span class="i">＋'+got+'</span></b><small>расход · приход, шт</small></div>'+(pf0&&(pf0.rev||pf0.miss)?'<div class="stat" style="grid-column:1/-1"><b class="i">'+money(pf0.p)+'</b><small>прибыль · видите только вы'+profTxt(pf0)+'</small></div>':'')+'</div>';
   if(tp.length)h+='<div class="lbl">Чаще всего продаётся</div>'+tp.map(function(n){return '<div class="log"><b>'+esc(n)+'</b><span class="o">'+top[n]+' шт</span></div>'}).join('');
   if(!LG.length)h+='<div class="empty">Операций за этот период нет</div>';
   var days={};
@@ -634,7 +665,7 @@ function hist(){
   [].forEach.call(document.querySelectorAll('#pc .chip'),function(c){c.onclick=function(){hp=+c.dataset.d;hist()}});
   $('e1').onclick=function(){dl('sklad-ostatki.csv',[['Название','Категория','Размер','Цвет','Цена','Остаток','Сумма']].concat(S.items.map(function(i){return [i.name,i.cat,i.size,i.color,i.price||0,i.qty,vOf(i)]})))};
   $('e2').onclick=function(){dl('sklad-istoriya.csv',[['Дата','Время','Операция','Товар','Кол-во','Сумма','Заметка','Сотрудник']].concat(S.log.map(function(l){var d=new Date(l.t);return [d.toLocaleDateString('ru-RU'),d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),l.type==='in'?'Привёз':l.type==='out'?'Продал':'Пересчёт',l.name,l.qty,l.sum||0,l.note||'',l.by||'']})))};
-  $('e3').onclick=function(){dl('sklad-backup-'+new Date().toISOString().slice(0,10)+'.json',null,JSON.stringify({v:2,items:S.items,log:S.log,cats:S.cats,biz:S.biz||'',debts:{people:D.people,ops:D.ops}}))};
+  $('e3').onclick=function(){dl('sklad-backup-'+new Date().toISOString().slice(0,10)+'.json',null,JSON.stringify({v:2,items:S.items,log:S.log,cats:S.cats,biz:S.biz||'',debts:{people:D.people,ops:D.ops},costs:isOwn?CP:undefined}))};   // закупка — только в копии хозяина
   $('e4').onclick=restoreUI;
   if($('rp'))$('rp').onclick=function(){
     var t='Отчёт Sklad Go '+td+'\n',r=0;

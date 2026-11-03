@@ -32,6 +32,7 @@ function загрузить(file) {
     function wait(st){показано.push(st==='blocked'?'закрыто':'ожидайте')}
     function booting(){показано.push('загрузка')}
     function nav(){} function hist(){} function debt(){} function botTab(){} function team(){}
+    function cpLoad(){}   // закупочные цены хозяина — к экрану ожидания отношения не имеют
     function stock(){показано.push('склад')}
     ${взять('mystatus')}
     ${взять('restore')}
