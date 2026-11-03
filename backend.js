@@ -203,7 +203,13 @@
       'что и остальная команда: владелец подтвердит доступ.</p><div class="err" id="ae"></div>' +
       '<button class="go ac" id="gin">Войти через Google</button>' +
       // Google требует, чтобы со входа была видна политика конфиденциальности
-      '<p style="text-align:center;margin-top:14px"><a href="privacy.html" style="color:var(--mu)">Конфиденциальность · Privacy</a></p>');
+      '<p style="text-align:center;margin-top:14px"><a href="privacy.html" style="color:var(--mu)">Конфиденциальность · Privacy</a></p>' +
+      // язык выбирают ещё до входа: продавец может не читать по-русски. Названия не переводим
+      (root.setLang ? '<p data-notr style="text-align:center;margin-top:6px"><button class="link" id="lgtg">Тоҷикӣ</button> · <button class="link" id="lgru">Русский</button></p>' : ''));
+    if (root.setLang) {
+      document.getElementById('lgtg').onclick = function () { if (root.SKLAD_LANG !== 'tg') root.setLang('tg'); };
+      document.getElementById('lgru').onclick = function () { if (root.SKLAD_LANG !== 'ru') root.setLang('ru'); };
+    }
     if (msg) document.getElementById('ae').textContent = msg;
     document.getElementById('gin').onclick = function () {
       this.disabled = true;
