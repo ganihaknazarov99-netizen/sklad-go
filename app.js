@@ -1140,6 +1140,10 @@ function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h='<h1>Команда</h1><div class="card"><div class="info"><b>'+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?'Владелец · ':'Сотрудник · ')+esc(ME.phone)+' · '+esc(ME.mail)+'</small></div><button class="link" id="me">Изменить</button></div>';
   if(window.skladAuth)h+='<div style="display:flex;justify-content:space-between"><button class="link" id="lo">Выйти</button>'+(isOwn?'':'<button class="link del" id="da">🗑 Удалить мой аккаунт</button>')+'</div>';
+  // Значок на экране телефона. Android и компьютер предлагают установку сами (backend.js ловит это),
+  // на iPhone такой кнопки нет — подсказываем, куда нажать
+  if(window.skladInstall)h+='<button class="go ac" id="ins" style="margin:6px 0 10px">📲 Установить Sklad Go на телефон</button>';
+  else if(/iPhone|iPad|iPod/.test(navigator.userAgent)&&!navigator.standalone)h+='<small style="display:block;margin:4px 0 10px">📲 Чтобы Sklad Go был значком на экране: «Поделиться» → «На экран Домой».</small>';
   h+='<div class="lbl">🎨 Вид</div>'+chipsHtml('th',[['light','Светлый'],['dark','Тёмный'],['auto','Как на телефоне']],window.SkladTheme?window.SkladTheme.get():'light')+'<div style="height:12px"></div>';
   if(isOwn)h+='<div class="lbl">🏪 Название магазина (подпись в сообщениях)</div><div class="row"><input id="bz" placeholder="Напр. Магазин Ганӣ" value="'+esc(S.biz||'')+'"><button class="go ac" id="bzs" style="padding:10px;font-size:15px;margin-bottom:8px">Сохранить</button></div>';
   var pd=staff.filter(function(x){return x.status==='pending'}),ac=staff.filter(function(x){return x.status!=='pending'});
@@ -1151,6 +1155,7 @@ function team(){
   if(!actList.length)h+='<div class="empty">Изменений пока нет</div>';
   h+=actList.slice(0,40).map(function(a){var d=new Date(a.t);return '<div class="log"><div><b>'+esc(a.by||'—')+'</b><small>'+esc(a.txt)+'</small></div><span style="color:var(--mu);font-size:12px;text-align:right">'+d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+'<br>'+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span></div>'}).join('');
   $('app').innerHTML=h;$('me').onclick=function(){gate(true)};
+  if($('ins'))$('ins').onclick=function(){var p=window.skladInstall;window.skladInstall=null;p.prompt();p.userChoice.then(function(c){if(c&&c.outcome==='accepted')toast('📲 Sklad Go установлен — ищите значок на экране');render()},function(){render()})};
   if(window.SkladTheme)bindChips('th',function(v){window.SkladTheme.set(v);render()});
   if($('lo'))$('lo').onclick=function(){if(anyDirty()&&this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Не всё отправлено! Нажмите ещё раз — выйти и потерять';return}window.skladAuth.signOut()};
   if($('da'))$('da').onclick=function(){

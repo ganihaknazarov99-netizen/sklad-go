@@ -222,6 +222,35 @@
     return loadJS('app.js');
   }
 
+  /* ---------- Приложение на телефоне ----------
+     sw.js хранит копию программы: склад открывается и без интернета. Кнопку «Установить»
+     программа показывает сама (вкладка «Команда»), если телефон её предлагает. */
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && root.isSecureContext) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+  if (root.addEventListener) {
+    root.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); root.skladInstall = e; });
+  }
+
+  // Открыли склад без связи — работаем с тем, что в памяти телефона. Связь появилась —
+  // перезапускаемся, чтобы войти и дослать изменения (но не посреди открытой формы)
+  function offline() {
+    startApp().then(function () { if (root.setSy) root.setSy('off'); });
+    if (root.addEventListener) root.addEventListener('online', function again() {
+      var ov = document.getElementById('ov');
+      if (ov && ov.innerHTML) { setTimeout(again, 2000); return; }
+      location.reload();
+    }, { once: true });
+  }
+  // Ключ входа живёт час. Без интернета его не продлить — Supabase отвечает «нет сессии».
+  // Раньше это открывало экран входа, и без связи склад было не открыть вовсе
+  function noNet(r) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    var e = r && r.error;
+    return !!e && /fetch|network|retryable/i.test((e.name || '') + ' ' + (e.message || ''));
+  }
+  function knownHere() { try { return !!localStorage.getItem('skladgo.uid'); } catch (e) { return false; } }
+
   /* ---------- Запуск ----------
      Нет настроек → демо. Есть настройки, но нет входа → экран входа.
      Есть вход → чистим данные чужого аккаунта на этом телефоне и запускаем программу. */
@@ -234,11 +263,12 @@
     if (bar) bar.style.display = 'none';
 
     if (!sb) {                                  // нет интернета при первом открытии
-      startApp().then(function () { if (root.setSy) root.setSy('off'); });
+      offline();
       return;
     }
     sb.auth.getSession().then(function (r) {
       session = (r && r.data && r.data.session) || null;
+      if (!session && noNet(r) && knownHere()) { offline(); return; }
       if (!session) {
         var why = authErrorFromUrl();
         // Убираем ошибку из адреса: иначе она висела бы и после обновления страницы
@@ -262,7 +292,7 @@
       startApp();
     }, function () {
       session = null;
-      startApp().then(function () { if (root.setSy) root.setSy('off'); });
+      offline();
     });
 
     sb.auth.onAuthStateChange(function (ev) {
