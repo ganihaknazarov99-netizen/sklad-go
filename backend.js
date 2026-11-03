@@ -145,13 +145,16 @@
   root.skladBackend = api;
 
   /* ---------- Вход ---------- */
+  // prompt=select_account: Google каждый раз показывает список аккаунтов. Без этого он молча
+  // входил в последний — и войти другим Gmail (продавцу на телефоне хозяина) было не выйти
   function signIn() {
     var to = location.href.split('#')[0].split('?')[0];
-    return sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: to } });
+    return sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: to, queryParams: { prompt: 'select_account' } } });
   }
   function wipeLocal() {
     try {
-      Object.keys(localStorage).forEach(function (k) { if (k.indexOf('skladgo.') === 0) localStorage.removeItem(k); });
+      // язык — не данные аккаунта: после выхода продавец-таджик не должен оказаться на русском
+      Object.keys(localStorage).forEach(function (k) { if (k.indexOf('skladgo.') === 0 && k !== 'skladgo.lang') localStorage.removeItem(k); });
       localStorage.removeItem('skladgo.v1');
     } catch (e) {}
   }
@@ -160,6 +163,11 @@
       signIn: signIn,
       signOut: function () {
         return sb.auth.signOut().then(function () { wipeLocal(); location.reload(); });
+      },
+      // Выйти и сразу к выбору аккаунта Google. Данные этого аккаунта с телефона стираются, как при выходе
+      switchAccount: function () {
+        return sb.auth.signOut().then(function () { wipeLocal(); return signIn(); })
+          .then(function (r) { if (r && r.error) location.reload(); }, function () { location.reload(); });
       },
       deleteAccount: function () {
         return sb.rpc('delete_my_account').then(function (r) {
@@ -202,6 +210,11 @@
     screen('<p>Склад и долги магазина — на всех ваших устройствах. Входите тем же Gmail, ' +
       'что и остальная команда: владелец подтвердит доступ.</p><div class="err" id="ae"></div>' +
       '<button class="go ac" id="gin">Войти через Google</button>' +
+      // Регистрация — тот же вход через Google: аккаунт Supabase заводится сам, а имя и телефон
+      // программа спросит сразу после входа. Отдельная кнопка — чтобы новичок не искал, где «зарегистрироваться»
+      '<button class="go" id="greg" style="width:100%;margin-top:8px;background:var(--card);color:var(--tx);border:1px solid var(--bd)">Регистрация</button>' +
+      '<p style="color:var(--mu);font-size:13px;margin:8px 2px 0">Новый в команде? Регистрация — это тот же вход через ваш Gmail: выберите почту, потом впишите имя и телефон. Владелец подтвердит доступ.</p>' +
+      '<p style="text-align:center;margin:8px 0 0"><a href="https://accounts.google.com/signup" target="_blank" rel="noopener" style="color:var(--mu)">Нет Gmail? Создать бесплатно</a></p>' +
       // Google требует, чтобы со входа была видна политика конфиденциальности
       '<p style="text-align:center;margin-top:14px"><a href="privacy.html" style="color:var(--mu)">Конфиденциальность · Privacy</a></p>' +
       // язык выбирают ещё до входа: продавец может не читать по-русски. Названия не переводим
@@ -211,14 +224,14 @@
       document.getElementById('lgru').onclick = function () { if (root.SKLAD_LANG !== 'ru') root.setLang('ru'); };
     }
     if (msg) document.getElementById('ae').textContent = msg;
-    document.getElementById('gin').onclick = function () {
-      this.disabled = true;
-      this.textContent = 'Открываю Google…';
-      var b = this;
-      signIn().then(function (r) {
-        if (r && r.error) { document.getElementById('ae').textContent = r.error.message || 'Не удалось войти'; b.disabled = false; b.textContent = 'Войти через Google'; }
-      }, function () { document.getElementById('ae').textContent = 'Не удалось войти'; b.disabled = false; b.textContent = 'Войти через Google'; });
+    var go = function (b, label) {
+      var fail = function (m) { document.getElementById('ae').textContent = m || 'Не удалось войти'; b.disabled = false; b.textContent = label; };
+      b.disabled = true;
+      b.textContent = 'Открываю Google…';
+      signIn().then(function (r) { if (r && r.error) fail(r.error.message); }, function () { fail(); });
     };
+    document.getElementById('gin').onclick = function () { go(this, 'Войти через Google'); };
+    document.getElementById('greg').onclick = function () { go(this, 'Регистрация'); };
   }
   function startApp() {
     var a = document.getElementById('auth'), app = document.getElementById('app');
