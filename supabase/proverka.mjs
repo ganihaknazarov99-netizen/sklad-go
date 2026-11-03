@@ -302,12 +302,28 @@ const права = (await db.query(`select
 да(!права.docs && !права.staff && !права.activity, 'охранников руками не вызвать — а срабатывают они всё равно (все разделы выше)');
 да(!права.anon_active, '«подтверждён ли я» без входа не вызвать');
 
-console.log('\n22. Новенький в очереди уходит сам');
+console.log('\n22. Закупочные цены видит только хозяин');
+await как(ХОЗЯИН, "update public.staff set status = 'active' where uid = $1", [ПРОДАВЕЦ]);
+ош = await какОшибка(ХОЗЯИН, "select public.doc_set('costs', $1::jsonb, null)", [JSON.stringify({ items: { a1: 50 } })]);
+да(!ош, 'хозяин записал закупочные цены' + (ош ? ': ' + ош : ''));
+да((await как(ХОЗЯИН, "select id from public.docs where id = 'costs'")).rows.length === 1, 'и видит их');
+да((await как(ПРОДАВЕЦ, "select id from public.docs where id = 'costs'")).rows.length === 0, 'подтверждённый продавец закупочных цен не видит');
+да((await как(ПРОДАВЕЦ, 'select id from public.docs')).rows.some((x) => x.id === 'main'), 'а склад видит, как прежде');
+ош = await какОшибка(ПРОДАВЕЦ, "select public.doc_set('costs', $1::jsonb, null)", [JSON.stringify({ items: {} })]);
+await как(ПРОДАВЕЦ, "update public.docs set data = '{}'::jsonb where id = 'costs'");
+let цены = (await db.query("select data from public.docs where id = 'costs'")).rows[0].data;
+да(цены.items && цены.items.a1 === 50, 'продавец их не стёр и не переписал' + (ош ? '' : ' (запрос прошёл, но ничего не изменил)'));
+ош = await какОшибка(ХОЗЯИН, "select public.doc_set('costs', $1::jsonb, null)", [JSON.stringify({ items: { a1: 55 } })]);
+цены = (await db.query("select data from public.docs where id = 'costs'")).rows[0].data;
+да(!ош && цены.items.a1 === 55, 'хозяин свои цены меняет');
+да((await как(null, "select id from public.docs where id = 'costs'").catch(() => ({ rows: [] }))).rows.length === 0, 'без входа их не видно');
+
+console.log('\n23. Новенький в очереди уходит сам');
 ош = await какОшибка(ВОР, 'select public.delete_my_account()');
 да(!ош, 'ожидающий может удалить свой аккаунт' + (ош ? ': ' + ош : ''));
 да(!(await строка(ВОР)), 'и его строки больше нет');
 
-console.log('\n23. Схему можно запустить повторно');
+console.log('\n24. Схему можно запустить повторно');
 ош = null;
 try { await db.exec(схема); } catch (e) { ош = e.message; }
 да(!ош, 'повторный запуск прошёл без ошибок' + (ош ? ': ' + ош : ''));

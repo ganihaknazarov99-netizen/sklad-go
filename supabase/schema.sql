@@ -420,9 +420,16 @@ drop policy if exists activity_read  on public.activity;
 drop policy if exists activity_write on public.activity;
 
 -- Склад и долги: только подтверждённые сотрудники, и только чтение-запись.
-create policy docs_read   on public.docs for select using (public.is_active());
-create policy docs_insert on public.docs for insert with check (public.is_active());
-create policy docs_update on public.docs for update using (public.is_active()) with check (public.is_active());
+-- Закупочные цены лежат отдельным документом 'costs' — его читает и пишет только хозяин.
+-- В самом складе их держать нельзя: склад уходит каждому продавцу целиком, и продавец
+-- может скачать его резервной копией. Живые обновления идут через эти же правила.
+create policy docs_read   on public.docs for select
+  using (public.is_active() and (id <> 'costs' or public.is_owner()));
+create policy docs_insert on public.docs for insert
+  with check (public.is_active() and (id <> 'costs' or public.is_owner()));
+create policy docs_update on public.docs for update
+  using (public.is_active() and (id <> 'costs' or public.is_owner()))
+  with check (public.is_active() and (id <> 'costs' or public.is_owner()));
 
 -- Свою строку видно всегда — иначе не показать экран «ожидайте подтверждения».
 create policy staff_read   on public.staff for select using (uid = auth.uid() or public.is_active());
