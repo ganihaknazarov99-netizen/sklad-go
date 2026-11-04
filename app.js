@@ -292,9 +292,9 @@ function stock(){
   S.items.forEach(function(i){val+=vOf(i);tot+=i.qty});
   S.log.forEach(function(l){if(dkey(l.t)===td){if(l.type==='in')inn+=l.qty;else if(l.type==='out'){out+=l.qty;rev+=l.sum||0}}});
   var h='<h1>'+LOGO+'<small id="syi" style="display:inline;font-size:12px" title="Общий склад">'+sytxt()+'</small></h1><div class="stats"><div class="stat" data-sv="1" style="cursor:pointer"><b>'+money(val)+'</b><small>стоимость склада · '+unitsTxt(S.items)+' · подробнее ›</small></div><div class="stat"><b>'+money(rev)+'</b><small>выручка сегодня</small></div><div class="stat"><b class="i">＋'+inn+'</b><small>привезли, шт</small></div><div class="stat"><b class="o">−'+out+'</b><small>продали, шт</small></div>'+allIn(val)+'</div>';
-  h+='<input id="q" type="search" placeholder="Поиск: название, размер, цвет…" value="'+esc(q)+'">';
+  h+='<div class="srow"><input id="q" type="search" placeholder="Поиск: название, размер, цвет…" value="'+esc(q)+'"><button class="scanb" id="scb" type="button" aria-label="Сканер штрихкода">📷</button></div>';
   h+='<div class="chips">'+['Все','⚠️ Мало','🗄 Архив'].concat(S.cats).map(function(c){return '<div class="chip'+(c===cat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</div>'}).join('')+'</div>';
-  var arc=cat==='🗄 Архив',L=S.items.filter(function(i){return(arc?gone(i):!gone(i))&&(cat==='Все'||arc||(cat==='⚠️ Мало'?i.qty<=3:i.cat===cat))&&lab(i).toLowerCase().indexOf(q.toLowerCase())>-1});
+  var arc=cat==='🗄 Архив',L=S.items.filter(function(i){return(arc?gone(i):!gone(i))&&(cat==='Все'||arc||(cat==='⚠️ Мало'?i.qty<=3:i.cat===cat))&&(lab(i).toLowerCase().indexOf(q.toLowerCase())>-1||!!q.trim()&&!!i.bc&&i.bc.indexOf(q.trim())>-1)});
   L.sort(function(a,b){return lab(a).localeCompare(lab(b),'ru')});
   if(!L.length)h+='<div class="empty">'+(arc?'В архиве пусто — всё в наличии':S.items.length?'Ничего не найдено':'Склад пуст 📦<br>Нажмите зелёную ＋ и добавьте первый товар')+'</div>';
   if(arc&&L.length)h+='<div class="lbl">Нет в наличии. ＋ — товар вернётся на склад, 🗑 — удалить (вернуть можно внизу «Истории»).</div>';
@@ -304,6 +304,7 @@ function stock(){
   if($('xa'))$('xa').onclick=function(){if(this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Нажмите ещё раз — удалить '+tov(L.length);return}delItems(L)};
   var qi=$('q');qi.oninput=function(e){q=e.target.value;var p=e.target.selectionStart;stock();var n=$('q');n.focus();n.setSelectionRange(p,p)};
   [].forEach.call(document.querySelectorAll('#app .chips .chip'),function(c){c.onclick=function(){cat=c.dataset.c;stock()}});
+  $('scb').onclick=function(){scanUI(scMode)};
   $('app').onclick=function(e){
     var t=e.target.closest('[data-m],[data-p],[data-o],[data-f],[data-qs],[data-fa],[data-sv],[data-x]');if(!t)return;
     if(t.dataset.sv){valueSheet();return}
@@ -327,7 +328,66 @@ window.addEventListener('popstate',function(){
   if(tab!=='stock'&&tabHs){tabHs=0;tab='stock';render()}
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&$('ov').innerHTML){e.preventDefault();close()}});
-function close(fromPop){$('ov').innerHTML='';if(fromPop===true)hs=Math.max(0,hs-1);else hsync();if(pend){var d=pend;pend=null;remote(d,pendV)}if(dpend){var e=dpend;dpend=null;dremote(e,dpendV)}}
+/* ===== Штрихкод: камера телефона находит товар, продаёт или принимает по одному.
+   Распознаёт сам телефон (barcode.js и scan.js — те же, что в полной версии): картинки никуда не уходят ===== */
+function bcNorm(c){return window.SkladBarcode?SkladBarcode.normalize(c):String(c||'').trim()}
+function byBc(code,not){code=bcNorm(code);if(!code)return null;return S.items.filter(function(i){return i!==not&&i.bc&&bcNorm(i.bc)===code})[0]||null}
+function setBc(it,code){
+  code=bcNorm(code);
+  if(!code){delete it.bc;it.eb=ME?ME.name:'';it.ed=Date.now();save();toast('Штрихкод убран');return true}
+  var o=byBc(code,it);if(o){toast('⚠️ Этот штрихкод уже у: '+lab(o));return false}
+  it.bc=code;it.eb=ME?ME.name:'';it.ed=Date.now();save();logAct('привязал штрихкод к «'+lab(it)+'»');toast('Штрихкод привязан: '+code);
+  return true;
+}
+function stopScan(){if(window.__scn){try{window.__scn.stop()}catch(e){}window.__scn=null}}
+var scMode='find';
+function unknownBc(code){
+  open('<h2>Штрихкод не найден</h2><small style="margin:4px 0 12px">'+esc(code)+'</small><button class="go ac" id="un1" type="button">＋ Создать товар с этим штрихкодом</button><button class="go" id="un2" type="button" style="background:var(--card);color:var(--tx);border:1px solid var(--bd);margin-top:8px;width:100%">Привязать к существующему товару</button><button class="link" id="un3" type="button">📷 Сканировать ещё</button>');
+  $('un1').onclick=function(){close();form(null,{bc:code})};
+  $('un2').onclick=function(){bcPick(code)};
+  $('un3').onclick=function(){close();scanUI(scMode)};
+}
+function bcPick(code){
+  open('<h2>Выберите товар</h2><small style="margin:4px 0 8px">'+esc(code)+'</small><input id="bpq" type="search" placeholder="Поиск: название, размер, цвет…" autocomplete="off"><div id="bpl"></div>');
+  function list(){
+    var w=$('bpq').value.toLowerCase(),L=S.items.filter(function(i){return !gone(i)&&(!w||lab(i).toLowerCase().indexOf(w)>-1)}).sort(function(a,b){return lab(a).localeCompare(lab(b),'ru')}).slice(0,40);
+    $('bpl').innerHTML=L.map(function(i){return '<div class="card" data-bp="'+i.id+'"><div class="info"><b>'+esc(i.name)+'</b><small>'+meta(i)+(i.bc?' · 📷 '+esc(i.bc):'')+'</small></div></div>'}).join('')||'<div class="empty">Ничего не найдено</div>';
+    [].forEach.call(document.querySelectorAll('[data-bp]'),function(c){c.onclick=function(){var it=find(c.dataset.bp);if(it&&setBc(it,code)){close();render();sheet(it.id)}}});
+  }
+  $('bpq').oninput=list;list();
+}
+// mode: find — открыть товар, in/out — каждый скан принимает или продаёт одну штуку. cb — привязать код к товару
+function scanUI(mode,cb,cur){
+  var attach=typeof cb==='function';mode=attach?'attach':(mode||scMode||'find');
+  open('<h2>Сканер штрихкода</h2>'
+    +(attach?'':'<div class="chips" id="scm" style="margin:6px 0">'+[['find','Найти'],['in','＋ Привёз'],['out','− Продал']].map(function(m){return '<div class="chip'+(m[0]===mode?' on':'')+'" data-sm="'+m[0]+'">'+m[1]+'</div>'}).join('')+'</div>')
+    +'<div class="scbox" id="scbox"><div class="scmsg">Включаю камеру…</div></div>'
+    +'<div class="scr" id="scr">Наведите камеру на штрихкод</div>'
+    +'<div class="srow"><input id="scx" inputmode="text" autocomplete="off" placeholder="Или введите номер вручную" value="'+esc(cur||'')+'"><button class="go ac" id="scg" type="button" style="flex:none;width:auto;padding:10px 22px;margin:0">OK</button></div>'
+    +'<div class="tools"><button id="sct" type="button" style="display:none">🔦 Фонарик</button><button id="scp" type="button">🖼 Из фото</button></div><input id="scf" type="file" accept="image/*" capture="environment" hidden>');
+  var res=$('scr');
+  function say(h,cls){res.className='scr'+(cls?' '+cls:'');res.innerHTML=h}
+  function done(code){
+    code=bcNorm(code);if(!code)return;buzz();
+    if(attach){stopScan();cb(code);return}
+    var it=byBc(code);
+    if(mode==='find'){stopScan();close();if(it)sheet(it.id);else unknownBc(code);return}
+    if(!it){stopScan();close();unknownBc(code);return}
+    if(apply(it,mode,1,'Скан')){say('✓ '+esc(lab(it))+' → '+qt(it.qty,uOf(it)),'ok');render()}
+    else say('⚠️ '+esc(lab(it))+': на складе только '+it.qty,'bad');
+  }
+  [].forEach.call(document.querySelectorAll('#scm [data-sm]'),function(c){c.onclick=function(){mode=scMode=c.dataset.sm;[].forEach.call(document.querySelectorAll('#scm .chip'),function(x){x.classList.toggle('on',x===c)});say('Наведите камеру на штрихкод')}});
+  if(window.SkladScan){
+    var on=false;
+    window.__scn=SkladScan.mount($('scbox'),{onCode:function(c){done(c)},onReady:function(ctl){if(ctl.torchOk)$('sct').style.display=''},onError:function(m){$('scbox').innerHTML='<div class="scmsg">'+esc(m)+'</div>'}});
+    $('sct').onclick=function(){on=!on;if(window.__scn)window.__scn.torch(on)};
+    $('scp').onclick=function(){$('scf').click()};
+    $('scf').onchange=function(){var f=this.files[0];if(!f)return;say('Распознаю…');SkladScan.decodeFile(f).then(function(r){if(r)done(r.text);else say('Фото не распознано — попробуйте ближе и ровнее','bad')})};
+  }else $('scbox').innerHTML='<div class="scmsg">Не удалось включить камеру</div>';
+  var go=function(){var v=$('scx').value.trim();if(attach){stopScan();cb(v);return}if(v)done(v)};
+  $('scg').onclick=go;$('scx').onkeydown=function(e){if(e.key==='Enter')go()};
+}
+function close(fromPop){stopScan();$('ov').innerHTML='';if(fromPop===true)hs=Math.max(0,hs-1);else hsync();if(pend){var d=pend;pend=null;remote(d,pendV)}if(dpend){var e=dpend;dpend=null;dremote(e,dpendV)}}
 function open(html){
   if(!hs)hpush();
   $('ov').innerHTML='<div class="ov" id="bg"><div class="sheet"><div class="xw"><button class="xb" id="xb" type="button" aria-label="Закрыть">✕</button></div>'+html+'</div></div>';
@@ -336,7 +396,7 @@ function open(html){
 }
 function sheet(id){
   var it=find(id);if(!it)return;
-  open('<h2>'+esc(it.name)+'</h2><small>'+meta(it)+(it.price?' · '+pTxt(it):'')+' · на складе: <b>'+qt(it.qty,uOf(it))+'</b>'+(estTxt([it])?' ('+estTxt([it])+')':'')+'</small>'+(cpOf(it)?'<small>Закупка '+money(cpOf(it))+(it.price?' · наценка <b class="i">'+money(it.price-cpOf(it))+'</b>':'')+' · видите только вы</small>':'')+'<small>'+itwho(it)+'</small><div class="step"><button id="dm">−</button><input id="n" type="number" inputmode="numeric" value="1" min="1"><button id="dp">＋</button></div><div class="nums">'+[1,5,10,20].map(function(x){return '<button data-n="'+x+'">'+x+'</button>'}).join('')+'</div><input id="nt" placeholder="Заметка: поставщик / покупатель (необязательно)"><div class="two"><button class="go out" id="so">− Продал</button><button class="go in" id="si">＋ Привёз</button></div><button class="go" id="sd" style="background:#7c3aed;margin-top:8px;width:100%">💳 Продать в долг клиенту</button><div class="tools"><button id="fx">⚖ Пересчёт</button><button id="ed">✏️ Изменить</button><button id="cp">⧉ Другой размер</button><button class="del" id="dl">🗑 Удалить</button></div>');
+  open('<h2>'+esc(it.name)+'</h2><small>'+meta(it)+(it.price?' · '+pTxt(it):'')+(it.bc?' · 📷 '+esc(it.bc):'')+' · на складе: <b>'+qt(it.qty,uOf(it))+'</b>'+(estTxt([it])?' ('+estTxt([it])+')':'')+'</small>'+(cpOf(it)?'<small>Закупка '+money(cpOf(it))+(it.price?' · наценка <b class="i">'+money(it.price-cpOf(it))+'</b>':'')+' · видите только вы</small>':'')+'<small>'+itwho(it)+'</small><div class="step"><button id="dm">−</button><input id="n" type="number" inputmode="numeric" value="1" min="1"><button id="dp">＋</button></div><div class="nums">'+[1,5,10,20].map(function(x){return '<button data-n="'+x+'">'+x+'</button>'}).join('')+'</div><input id="nt" placeholder="Заметка: поставщик / покупатель (необязательно)"><div class="two"><button class="go out" id="so">− Продал</button><button class="go in" id="si">＋ Привёз</button></div><button class="go" id="sd" style="background:#7c3aed;margin-top:8px;width:100%">💳 Продать в долг клиенту</button><div class="tools"><button id="fx">⚖ Пересчёт</button><button id="ed">✏️ Изменить</button><button id="cp">⧉ Другой размер</button><button id="bcb">📷 Штрихкод</button><button class="del" id="dl">🗑 Удалить</button></div>');
   function n(){return Math.max(1,parseInt($('n').value,10)||1)}
   $('dm').onclick=function(){$('n').value=Math.max(1,n()-1)};$('dp').onclick=function(){$('n').value=n()+1};
   [].forEach.call(document.querySelectorAll('[data-n]'),function(b){b.onclick=function(){$('n').value=b.dataset.n}});
@@ -369,6 +429,7 @@ function sheet(id){
     };
   };
   $('ed').onclick=function(){form(it)};
+  $('bcb').onclick=function(){scanUI('attach',function(code){if(setBc(it,code)){close();render();sheet(it.id)}},it.bc)};
   $('cp').onclick=function(){form(null,{name:it.name,cat:it.cat,color:it.color,price:it.price,u:it.u,pk:it.pk,pb:it.pb,cpv:cpOf(it)})};
   $('dl').onclick=function(){
     if(this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Нажмите ещё раз — удалить';return}
@@ -401,6 +462,7 @@ function sortSizes(a){
 function form(it,pre){
   var d=it||pre||{},isNew=!it,qm={};
   var h='<h2>'+(isNew?'Новый товар':'Изменить товар')+'</h2><br><input id="nm" placeholder="Название (напр. Куртка зимняя)" value="'+esc(d.name||'')+'"><select id="ct">'+S.cats.map(function(c){return '<option value="'+esc(c)+'"'+(c===d.cat?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'<option value="+">＋ Новая категория…</option></select>';
+  h+='<div class="srow" style="margin-top:8px"><input id="bcv" inputmode="text" autocomplete="off" placeholder="Штрихкод (необязательно)" value="'+esc(d.bc||'')+'"><button class="scanb" id="bcs" type="button" aria-label="Сканер штрихкода">📷</button></div><div id="bcbox"></div>';
   h+='<div class="lbl">'+(isNew?'Цвета — нажмите нужные (можно несколько)':'Цвет')+'</div><div class="wrap" id="cw">'+COL.map(function(c){return '<div class="chip" data-col="'+c[0]+'"><i style="background:'+c[1]+'"></i>'+c[0]+'</div>'}).join('')+'</div><input id="cl" placeholder="'+(isNew?'Другие цвета через запятую':'Или впишите свой цвет')+'" value="'+(isNew?'':esc(d.color||''))+'">';
   if(isNew)h+='<div class="lbl" id="szl">Размеры — нажмите нужные</div><div class="wrap" id="sw">'+SC.map(function(x){return '<div class="chip" data-s="'+x+'">'+x+'</div>'}).join('')+'</div><input id="sz" placeholder="Или впишите: L, XL, XXL · M-XXXL · L-2XL"><div class="lbl" id="qal">Сколько штук</div><input id="qa" type="number" inputmode="numeric" placeholder="Одинаково на все цвета и размеры"><div class="qg" id="qg"></div>';
   else h+='<input id="sz" placeholder="Размер" value="'+esc(it.size)+'">';
@@ -408,6 +470,12 @@ function form(it,pre){
   open(h);
   bindUnit('f',function(){var r=readUnit('f');$('pr').placeholder=$('prl').textContent=priceHint(r.u,r.pb);if($('cpi'))$('cpi').placeholder=cpHint(r.u,r.pb);if(isNew)grid()});
   if($('cpi')){var mgx=function(){var p=parseFloat($('pr').value)||0,cv=parseFloat($('cpi').value)||0;$('mg').textContent=(p&&cv)?'Наценка: '+(p>=cv?'+':'')+money(p-cv)+' ('+Math.round((p-cv)/cv*100)+'%)':''};$('cpi').oninput=mgx;$('pr').addEventListener('input',mgx);mgx()}
+  $('bcs').onclick=function(){
+    var bx=$('bcbox');if(bx.innerHTML){stopScan();bx.innerHTML='';bx.className='';return}
+    if(!window.SkladScan){bx.className='scbox';bx.innerHTML='<div class="scmsg">Не удалось включить камеру</div>';return}
+    bx.className='scbox';
+    window.__scn=SkladScan.mount(bx,{cooldown:1500,onCode:function(c){$('bcv').value=c;buzz();stopScan();bx.innerHTML='';bx.className=''},onError:function(m){bx.innerHTML='<div class="scmsg">'+esc(m)+'</div>'}});
+  };
   var CH=document.querySelectorAll('#cw .chip');
   $('ct').onchange=function(){if(this.value!=='+')return;var self=this;self.selectedIndex=0;if($('ncr'))return;var d=document.createElement('div');d.id='ncr';d.className='row';d.innerHTML='<input id="nci" placeholder="Название категории"><button class="go ac" id="ncb" style="padding:10px">Добавить</button>';self.after(d);$('nci').focus();$('ncb').onclick=function(){var c=$('nci').value.trim();if(!c)return;S.cats.push(c);save();var o=document.createElement('option');o.textContent=c;self.insertBefore(o,self.lastChild);self.value=c;d.remove()}};
   function rd(){[].forEach.call(document.querySelectorAll('[data-q]'),function(i){qm[i.dataset.q]=i.value})}
@@ -448,16 +516,23 @@ function form(it,pre){
   $('sv').onclick=function(){
     var nm=$('nm').value.trim();if(!nm){toast('⚠️ Введите название товара');$('nm').style.borderColor='var(--out)';$('nm').focus();return}
     var c=$('ct').value,pr=parseFloat($('pr').value)||0,cv=$('cpi')?parseFloat($('cpi').value)||0:-1,cps={};
+    // Штрихкод — у одного товара: два товара с одним кодом сканер не различит
+    var bcv=bcNorm($('bcv').value),dupb=bcv&&byBc(bcv,it);
+    if(dupb&&it){toast('⚠️ Этот штрихкод уже у: '+lab(dupb));$('bcv').focus();return}
     if(it&&cv>=0){cps[it.id]=cv;cpSet(cps)}
-    if(it){it.name=nm;it.cat=c;it.color=$('cl').value.trim();it.price=pr;it.size=nz($('sz').value.trim());var ru=readUnit('f');it.u=ru.u;it.pk=ru.pk;it.pb=ru.pb;it.eb=ME?ME.name:'';it.ed=Date.now();save();close();logAct('изменил товар «'+nm+'»');render();return}
-    this.disabled=true;var RU=readUnit('f');rd();var K=combos(),qa=parseInt($('qa').value,10)||0,single=isSingle(K),NZ=gs().length;
+    if(it){if(bcv)it.bc=bcv;else delete it.bc;it.name=nm;it.cat=c;it.color=$('cl').value.trim();it.price=pr;it.size=nz($('sz').value.trim());var ru=readUnit('f');it.u=ru.u;it.pk=ru.pk;it.pb=ru.pb;it.eb=ME?ME.name:'';it.ed=Date.now();save();close();logAct('изменил товар «'+nm+'»');render();return}
+    var RU=readUnit('f');rd();var K=combos(),qa=parseInt($('qa').value,10)||0,single=isSingle(K),NZ=gs().length;
+    if(bcv&&!single){toast('⚠️ Штрихкод — для одного товара: выберите один цвет и размер или привяжите код потом в окне товара');$('bcv').focus();return}
+    // тот же товар заводят ещё раз (привёз ещё) — код его же; у другого товара — нельзя
+    if(dupb&&!(dupb.name.toLowerCase()===nm.toLowerCase()&&dupb.cat===c&&(dupb.color||'')===K[0][0]&&(dupb.size||'')===K[0][1])){toast('⚠️ Этот штрихкод уже у: '+lab(dupb));$('bcv').focus();return}
+    this.disabled=true;
     if(RU.u==='пачка'&&NZ)RU.pk=[NZ,NZ];
     var z=0;
     K.forEach(function(k){
       var n=single?qa:(parseInt(qm[k[0]+'|'+k[1]],10)||0);
       var ex=S.items.filter(function(i){return i.name.toLowerCase()===nm.toLowerCase()&&i.cat===c&&(i.color||'')===k[0]&&(i.size||'')===k[1]})[0];
-      if(ex){if(cv>0)cps[ex.id]=cv;if(n>0)apply(ex,'in',n,'Привёз (в папку)');return}
-      var x={id:uid(),name:nm,cat:c,size:k[1],color:k[0],price:pr,qty:0,ar:true,u:RU.u,pk:RU.pk,pb:RU.pb,ab:ME?ME.name:'',ad:Date.now()};S.items.push(x);if(cv>0)cps[x.id]=cv;if(n>0)apply(x,'in',n,'Начальный остаток');else z++;
+      if(ex){if(cv>0)cps[ex.id]=cv;if(bcv&&!ex.bc)ex.bc=bcv;if(n>0)apply(ex,'in',n,'Привёз (в папку)');return}
+      var x={id:uid(),name:nm,cat:c,size:k[1],color:k[0],price:pr,qty:0,ar:true,u:RU.u,pk:RU.pk,pb:RU.pb,ab:ME?ME.name:'',ad:Date.now()};if(bcv)x.bc=bcv;S.items.push(x);if(cv>0)cps[x.id]=cv;if(n>0)apply(x,'in',n,'Начальный остаток');else z++;
     });
     if(Object.keys(cps).length)cpSet(cps);
     fo[(nm+'|'+c).toLowerCase()]=true;save();close();toast('Добавлено позиций: '+K.length+(z?' · без остатка ('+z+') — в 🗄 Архиве':''));logAct('добавил товар «'+nm+'» ('+K.length+' поз.)');render();
