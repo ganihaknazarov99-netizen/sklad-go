@@ -4,6 +4,10 @@
   "buildCommand": null,
   "installCommand": null,
   "outputDirectory": ".",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://sklad-go-production.up.railway.app/api/:path*" },
+    { "source": "/auth/:path*", "destination": "https://sklad-go-production.up.railway.app/auth/:path*" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

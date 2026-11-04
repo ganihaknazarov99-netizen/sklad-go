@@ -22,7 +22,10 @@
     'skladgo.vercel.app': {
       url: 'https://qjymwgulpcxyuuphsfrx.supabase.co',
       anonKey: 'sb_publishable_jGtHY6ADsb02PqQs9SeI8g_KPvyz7EP'
-    }
+    },
+    // Проверка своего сервера на Railway (server/) перед переездом магазина. /api и /auth
+    // на этом адресе Vercel пересылает на Railway (vercel.json). Ключей тут нет и не нужно
+    'sklad-go-git-claude-happy-agnesi-467428-gani26.vercel.app': { api: '/api' }
   };
   window.SKLAD_CONFIG = МАГАЗИН[location.hostname] || { url: '', anonKey: '' };
 })();
