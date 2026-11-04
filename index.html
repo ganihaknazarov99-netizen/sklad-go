@@ -119,6 +119,15 @@ input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:n
 .demobar span{font-size:12px;color:var(--mu);min-width:0}
 .demobar b{color:var(--ac)}
 .demobar button{flex:none;background:none;border:1px solid var(--bd);border-radius:99px;color:var(--mu);font-size:12px;padding:4px 10px}
+.srow{display:flex;gap:8px;align-items:stretch;margin-bottom:8px}
+.srow input{margin:0;flex:1;min-width:0}
+.scanb{width:52px;flex:none;border-radius:12px;border:1px solid var(--bd);background:var(--card);color:var(--ac);font-size:22px;padding:0}
+.scbox{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3;margin:8px 0}
+.scbox video{width:100%;height:100%;object-fit:cover;display:block}
+.scbox .frame{position:absolute;left:8%;right:8%;top:28%;bottom:28%;border:3px solid rgba(255,255,255,.95);border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
+.scmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;text-align:center;padding:14px;font-size:14px}
+.scr{min-height:40px;padding:9px 12px;border-radius:12px;background:var(--card);border:1px solid var(--bd);margin-bottom:8px;font-size:14px}
+.scr.ok{border-color:var(--in);color:var(--in);font-weight:700}.scr.bad{border-color:var(--out);color:var(--out)}
 </style>
 
 <div class="demobar" id="demobar"><span><b>Демо</b> · данные только в этом браузере</span><span style="flex:none"><button id="democlean" type="button">Начать свой склад</button> <button id="demoreset" type="button">Сбросить</button></span></div>
@@ -136,6 +145,9 @@ input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:n
         integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o"
         crossorigin="anonymous"></script>
 <script src="merge.js"></script>
+<!-- Сканер штрихкода: распознавание на самом телефоне, картинки никуда не уходят -->
+<script src="barcode.js"></script>
+<script src="scan.js"></script>
 <script src="config.js"></script>
 <!-- Свой сервер на Railway: переводчик для backend.js (включается в config.js) -->
 <script src="backend-server.js"></script>

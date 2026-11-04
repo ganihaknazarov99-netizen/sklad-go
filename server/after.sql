@@ -50,7 +50,7 @@ create trigger sklad_notify after insert on public.activity for each row execute
 -- сами при каждом изменении. Программе они не нужны, продавцам недоступны.
 drop table if exists public.товары, public.операции, public.люди, public.долги, public.команда, public.лента;
 create table public.товары (название text, категория text, цвет text, размер text, единица text, количество numeric,
-  цена numeric, цена_за text, штук_в_пачке int, нет_в_наличии boolean, добавил text, добавлено timestamptz, id text);
+  цена numeric, цена_за text, штук_в_пачке int, нет_в_наличии boolean, штрихкод text, добавил text, добавлено timestamptz, id text);
 create table public.операции (время timestamptz, вид text, товар text, количество numeric, сумма numeric, заметка text, сотрудник text);
 create table public.люди (имя text, телефон text, id text);
 create table public.долги (человек text, вид text, сумма numeric, время timestamptz, вернуть_до text, заметка text, записал text, id text);
@@ -65,7 +65,7 @@ begin
         coalesce(nullif(i->>'u',''),'шт'), (i->>'qty')::numeric, (i->>'price')::numeric,
         case when i->>'pb' = 'pack' then 'за пачку' else 'за штуку' end,
         case when jsonb_typeof(i->'pk') = 'array' then (i->'pk'->>0)::int end,
-        coalesce((i->>'qty')::numeric, 0) <= 0, i->>'ab', to_timestamp((i->>'ad')::bigint / 1000.0), i->>'id'
+        coalesce((i->>'qty')::numeric, 0) <= 0, nullif(i->>'bc',''), i->>'ab', to_timestamp((i->>'ad')::bigint / 1000.0), i->>'id'
       from docs, jsonb_array_elements(coalesce(docs.data->'items','[]'::jsonb)) i where docs.id = 'main';
     insert into операции select to_timestamp((l->>'t')::bigint / 1000.0),
         case l->>'type' when 'out' then 'продажа' when 'in' then 'приход' when 'fix' then 'пересчёт' else l->>'type' end,
