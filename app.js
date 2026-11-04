@@ -296,6 +296,7 @@ function stock(){
   h+='<div class="chips">'+['Все','⚠️ Мало','🗄 Архив'].concat(S.cats).map(function(c){return '<div class="chip'+(c===cat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</div>'}).join('')+'</div>';
   var arc=cat==='🗄 Архив',L=S.items.filter(function(i){return(arc?gone(i):!gone(i))&&(cat==='Все'||arc||(cat==='⚠️ Мало'?i.qty<=3:i.cat===cat))&&(lab(i).toLowerCase().indexOf(q.toLowerCase())>-1||!!q.trim()&&!!i.bc&&i.bc.indexOf(q.trim())>-1)});
   L.sort(function(a,b){return lab(a).localeCompare(lab(b),'ru')});
+  if(cat==='⚠️ Мало')h+='<button class="go ac" id="buy" type="button" style="width:100%;margin-bottom:10px">📋 Что докупить — список поставщику</button>';
   if(!L.length)h+='<div class="empty">'+(arc?'В архиве пусто — всё в наличии':S.items.length?'Ничего не найдено':'Склад пуст 📦<br>Нажмите зелёную ＋ и добавьте первый товар')+'</div>';
   if(arc&&L.length)h+='<div class="lbl">Нет в наличии. ＋ — товар вернётся на склад, 🗑 — удалить (вернуть можно внизу «Истории»).</div>';
   h+=listHtml(L,arc);
@@ -305,6 +306,7 @@ function stock(){
   var qi=$('q');qi.oninput=function(e){q=e.target.value;var p=e.target.selectionStart;stock();var n=$('q');n.focus();n.setSelectionRange(p,p)};
   [].forEach.call(document.querySelectorAll('#app .chips .chip'),function(c){c.onclick=function(){cat=c.dataset.c;stock()}});
   $('scb').onclick=function(){scanUI(scMode)};
+  if($('buy'))$('buy').onclick=buyUI;
   $('app').onclick=function(e){
     var t=e.target.closest('[data-m],[data-p],[data-o],[data-f],[data-qs],[data-fa],[data-sv],[data-x]');if(!t)return;
     if(t.dataset.sv){valueSheet();return}
@@ -318,6 +320,45 @@ function stock(){
   };
 }
 
+/* ===== Что докупить: список «⚠️ Мало» одной кнопкой уходит поставщику в WhatsApp.
+   Отмечаете, что заказать и сколько; закончившиеся тоже можно добавить. Номер
+   поставщика запоминается на этом телефоне ===== */
+function buyLow(){return S.items.filter(function(i){return !gone(i)&&i.qty<=3}).sort(function(a,b){return a.qty-b.qty||lab(a).localeCompare(lab(b),'ru')})}
+function buyOut(){return S.items.filter(gone).sort(function(a,b){return (b.ld||b.ed||b.ad||0)-(a.ld||a.ed||a.ad||0)}).slice(0,30)}
+// R: [{it, n}] — n сколько заказать (0 — не сказано, пишем, сколько осталось)
+function buyMsg(R,biz){
+  return 'Салом! Нужно докупить:\n'+R.map(function(r,k){return (k+1)+'. '+lab(r.it)+' — '+(r.n>0?qt(r.n,uOf(r.it)):'осталось '+qt(Math.max(0,r.it.qty),uOf(r.it)))}).join('\n')+(biz?'\n— '+biz:'');
+}
+function buyUI(){
+  var L=buyLow(),O=buyOut(),sp=splitPh(LSG('skladgo.sup')||'');
+  function row(i,on){return '<label class="brow"><input type="checkbox" data-b="'+i.id+'"'+(on?' checked':'')+'><span><b>'+esc(i.name)+'</b><small>'+meta(i)+' · на складе: '+qt(Math.max(0,i.qty),uOf(i))+'</small></span><input type="number" inputmode="numeric" min="0" placeholder="сколько" data-bn="'+i.id+'"></label>'}
+  open('<h2>📋 Что докупить</h2><small style="margin:4px 0 8px">Отметьте, что заказать, и сколько. Список уйдёт поставщику в WhatsApp.</small>'
+    +(L.length?'<div class="lbl">Мало (3 и меньше)</div>'+L.map(function(i){return row(i,true)}).join(''):'')
+    +(O.length?'<div class="lbl">Закончились</div>'+O.map(function(i){return row(i,false)}).join(''):'')
+    +(L.length||O.length?'':'<div class="empty">Всего хватает — докупать нечего</div>')
+    +'<div class="lbl">Поставщик (необязательно)</div><div style="display:grid;grid-template-columns:128px 1fr;gap:8px">'+phSel('bk',sp[0])+'<input id="bp" type="tel" inputmode="tel" placeholder="Телефон поставщика" value="'+esc(sp[1])+'"></div>'
+    +'<small style="margin:-4px 0 8px">Номер поставщика запомнится на этом телефоне. Без номера WhatsApp сам предложит выбрать чат.</small>'
+    +'<button class="go" id="bwa" type="button" style="background:#25d366;width:100%">💬 Отправить в WhatsApp</button><button class="link" id="bcp" type="button" style="display:block;margin:4px auto 0">📋 Скопировать список</button>');
+  // вписали количество — значит, заказываем
+  [].forEach.call(document.querySelectorAll('[data-bn]'),function(n){n.oninput=function(){if(+n.value>0)document.querySelector('[data-b="'+n.dataset.bn+'"]').checked=true}});
+  $('bp').oninput=function(){smartPh('bk','bp')};
+  function pick(){
+    var R=[].filter.call(document.querySelectorAll('[data-b]'),function(c){return c.checked}).map(function(c){var it=find(c.dataset.b),n=parseInt(document.querySelector('[data-bn="'+c.dataset.b+'"]').value,10)||0;return {it:it,n:n}}).filter(function(r){return r.it});
+    if(!R.length){toast('⚠️ Отметьте хотя бы один товар');return null}
+    return R;
+  }
+  $('bcp').onclick=function(){var R=pick();if(R)dcopy(buyMsg(R,S.biz),'Список скопирован')};
+  $('bwa').onclick=function(){
+    var R=pick();if(!R)return;
+    var ph=normPh($('bk').value.replace(/\D/g,''),$('bp').value);if(ph===null){toast('⚠️ Проверьте номер телефона');$('bp').focus();return}
+    LSS('skladgo.sup',ph||null);
+    var t=buyMsg(R,S.biz),u='https://wa.me/'+(ph||'').replace(/\D/g,'')+'?text='+encodeURIComponent(t);
+    try{navigator.clipboard.writeText(t).catch(function(){})}catch(x){}
+    var l=document.createElement('a');l.href=u;l.target='_blank';l.rel='noopener noreferrer';l.style.display='none';document.body.appendChild(l);l.click();l.remove();
+    logAct('отправил поставщику «что докупить»: '+R.length+' поз.');
+    toast('💬 Открываю WhatsApp Business… Если не открылся — текст скопирован, вставьте его в чат');
+  };
+}
 function showText(t){open('<h2>Отчёт</h2><br><textarea readonly style="width:100%;height:220px;padding:10px;border-radius:12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font:inherit">'+esc(t)+'</textarea><br><button class="link" id="xc">Закрыть</button>');$('xc').onclick=close}
 var hs=0,skipPop=0,tabHs=0;
 function hpush(){try{history.pushState({sg:1},'');hs++}catch(e){}}
