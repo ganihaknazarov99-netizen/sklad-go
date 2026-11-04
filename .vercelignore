@@ -10,3 +10,6 @@ supabase/
 *.md
 .gitignore
 .nojekyll
+server/
+package.json
+package-lock.json

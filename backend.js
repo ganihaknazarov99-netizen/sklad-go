@@ -18,10 +18,13 @@
   root.skladLoadJS = loadJS;
 
   var cfg = root.SKLAD_CONFIG || {};
-  var configured = !!(cfg.url && cfg.anonKey && String(cfg.url).indexOf('http') === 0);
-  var sb = (configured && root.supabase)
-    ? root.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
-    : null;
+  // Свой сервер на Railway ({ api: '/api' }, backend-server.js) говорит так же, как Supabase,
+  // поэтому дальше всё одинаково. Не загрузился его файл — это не демо, а «нет связи»
+  var configured = !!cfg.api || !!(cfg.url && cfg.anonKey && String(cfg.url).indexOf('http') === 0);
+  var sb = cfg.api ? (root.skladServerClient ? root.skladServerClient(cfg.api) : null)
+    : (configured && root.supabase)
+      ? root.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
+      : null;
 
   /* ---------- Ошибки ----------
      Приложению важны коды: version_conflict (слить и повторить), network (данные
