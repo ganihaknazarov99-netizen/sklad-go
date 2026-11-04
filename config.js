@@ -6,23 +6,21 @@
    отправили ссылку «попробуй», попали бы к вам в магазин в очередь —
    со своими именами, телефонами и почтой.
 
-   Значения берутся в Supabase: Project Settings → Data API (Project URL,
-   без хвоста /rest/v1/) и Project Settings → API Keys (ключ publishable).
-   Этот ключ можно спокойно держать в открытом коде: он даёт доступ только
-   к тому, что разрешают правила в supabase/schema.sql.
+   Сервер — свой, на Railway (папка server/, база Postgres там же).
+   { api: '/api' } значит: спрашивать этот же сайт, а Vercel пересылает /api
+   и /auth на Railway (vercel.json). Ключей здесь нет и не нужно: вход держит
+   сервер, а кто что видит — решают правила supabase/schema.sql в базе.
 
-   Тайный ключ (secret, service_role) сюда не вписывать никогда: он
-   открывает всю базу в обход любых правил.
+   До 4 ноября 2026 магазин работал на Supabase. Его адрес и ключ publishable
+   остались в истории git (config.js до коммита «Магазин на своём сервере
+   Railway»): вернуть их сюда — и магазин снова на Supabase.
 
-   И адрес проекта вписывать только ПОСЛЕ того, как в Supabase выполнен
-   свежий schema.sql и записана почта хозяина. Иначе по старым правилам
-   хозяином станет первый, кто прочтёт этот файл. */
+   Тайные ключи (secret, service_role, ключ Google) сюда не вписывать никогда. */
 (function () {
   var МАГАЗИН = {
-    'skladgo.vercel.app': {
-      url: 'https://qjymwgulpcxyuuphsfrx.supabase.co',
-      anonKey: 'sb_publishable_jGtHY6ADsb02PqQs9SeI8g_KPvyz7EP'
-    }
+    'skladgo.vercel.app': { api: '/api' },
+    // Адрес для проверки правок сервера, прежде чем они попадут в магазин
+    'sklad-go-git-claude-happy-agnesi-467428-gani26.vercel.app': { api: '/api' }
   };
   window.SKLAD_CONFIG = МАГАЗИН[location.hostname] || { url: '', anonKey: '' };
 })();
