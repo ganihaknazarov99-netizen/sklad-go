@@ -278,6 +278,10 @@
      Есть вход → чистим данные чужого аккаунта на этом телефоне и запускаем программу. */
   function boot() {
     var bar = document.getElementById('demobar');
+    if (cfg.mock) {
+      loadJS('mock.js').catch(function (e) { document.getElementById('app').textContent = e.message; });
+      return;
+    }
     if (!configured) {
       loadJS('demo.js').catch(function (e) { document.getElementById('app').textContent = e.message; });
       return;
