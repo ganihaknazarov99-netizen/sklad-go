@@ -76,26 +76,27 @@
     return ref;
   }
 
-  /* ---------- Команда: staff ---------- */
-  function staffRef(uid) {
+  /* ---------- Команда (staff) и покупатели (customers): строка по uid ---------- */
+  function staffRef(uid, table) {
+    table = table || 'staff';
     return {
       get: function () {
-        return sb.from('staff').select('*').eq('uid', uid).maybeSingle().then(function (r) {
+        return sb.from(table).select('*').eq('uid', uid).maybeSingle().then(function (r) {
           var d = rows(r);
           return { exists: !!d, data: function () { return d; } };
         });
       },
       // Роль и статус при добавлении решает сервер (триггер staff_guard): первый вошедший —
       // владелец, остальные ждут подтверждения.
-      set: function (o) { return sb.from('staff').insert(o).then(rows); },
-      update: function (o) { return sb.from('staff').update(o).eq('uid', uid).then(rows); }
+      set: function (o) { return sb.from(table).insert(o).then(rows); },
+      update: function (o) { return sb.from(table).update(o).eq('uid', uid).then(rows); }
     };
   }
 
   /* ---------- Списки: staff и лента activity ----------
      Ключ строки: у сотрудника — uid, у записи ленты — id. На любое изменение перечитываем
      список целиком: он короткий, зато всегда совпадает с правами доступа. */
-  var PK = { staff: 'uid', activity: 'id' };
+  var PK = { staff: 'uid', activity: 'id', customers: 'uid' };
   function collection(name) {
     var ord = null, lim = null, q = {};
     q.orderBy = function (f, dir) { ord = { f: f, asc: dir !== 'desc' }; return q; };
@@ -127,7 +128,7 @@
   var db = {
     doc: function (path) {
       var p = String(path).split('/');
-      if (p[0] === 'staff') return staffRef(p[1]);
+      if (p[0] === 'staff' || p[0] === 'customers') return staffRef(p[1], p[0]);
       return docRef(p[1] || p[0]);          // warehouse/main → 'main', warehouse/debts → 'debts'
     },
     collection: collection
@@ -172,6 +173,14 @@
         return sb.auth.signOut().then(function () { wipeLocal(); return signIn(); })
           .then(function (r) { if (r && r.error) location.reload(); }, function () { location.reload(); });
       },
+      // Свой сервер умеет вход по почте и паролю: тем, кто входит через Google, — задать пароль
+      setPassword: sb.auth.setPassword ? function (pass, current) {
+        return sb.auth.setPassword(pass, current).then(function (r) {
+          if (r.error) throw new Error(r.error.message || 'Не удалось сохранить');
+          if (session) session.user.has_password = true;
+        });
+      } : undefined,
+      hasPassword: function () { return !!(session && session.user.has_password); },
       deleteAccount: function () {
         return sb.rpc('delete_my_account').then(function (r) {
           if (r.error) throw new Error(/owner_cannot_delete/.test(r.error.message || '') ? 'Владелец не может удалить свой аккаунт' : 'Не удалось удалить аккаунт');
@@ -218,6 +227,7 @@
       '<button class="go" id="greg" style="width:100%;margin-top:8px;background:var(--card);color:var(--tx);border:1px solid var(--bd)">Регистрация</button>' +
       '<p style="color:var(--mu);font-size:13px;margin:8px 2px 0">Новый в команде? Регистрация — это тот же вход через ваш Gmail: выберите почту, потом впишите имя и телефон. Владелец подтвердит доступ.</p>' +
       '<p style="text-align:center;margin:8px 0 0"><a href="https://accounts.google.com/signup" target="_blank" rel="noopener" style="color:var(--mu)">Нет Gmail? Создать бесплатно</a></p>' +
+      '<div id="pwb"></div>' +
       // Google требует, чтобы со входа была видна политика конфиденциальности
       '<p style="text-align:center;margin-top:14px"><a href="privacy.html" style="color:var(--mu)">Конфиденциальность · Privacy</a></p>' +
       // язык выбирают ещё до входа: продавец может не читать по-русски. Названия не переводим
@@ -235,6 +245,74 @@
     };
     document.getElementById('gin').onclick = function () { go(this, 'Войти через Google'); };
     document.getElementById('greg').onclick = function () { go(this, 'Регистрация'); };
+    pwBlock();
+  }
+
+  /* ---------- Вход по почте и паролю (только свой сервер) ----------
+     Покупатели входят так: им Gmail магазина ни к чему. Сотрудник тоже может, а хозяин и
+     продавцы, вошедшие через Google, задают пароль во вкладке «Команда» */
+  var pwTab = 'in', pwRole = 'customer', PWR = { customer: '🛍 Покупатель', staff: '👤 Сотрудник магазина' };
+  function pwBlock() {
+    var box = document.getElementById('pwb');
+    if (!box || !cfg.api || !sb.auth.signInWithPassword) return;
+    var $ = function (i) { return document.getElementById(i); }, up = pwTab === 'up', cust = pwRole === 'customer';
+    box.innerHTML = '<div class="lbl" style="text-align:center;margin:18px 0 8px">или по почте и паролю</div>'
+      + '<div class="seg2" id="pwt" style="margin-bottom:10px"><button type="button" data-v="in" class="' + (up ? '' : 'on') + '">Вход</button><button type="button" data-v="up" class="' + (up ? 'on' : '') + '">Регистрация</button></div>'
+      + (up ? '<div class="two" id="pwr" style="margin-bottom:8px">' + Object.keys(PWR).map(function (k) {
+          return '<button type="button" class="go" data-r="' + k + '" style="' + (k === pwRole ? 'background:var(--ac)' : 'background:var(--card);color:var(--tx);border:1px solid var(--bd)') + '">' + PWR[k] + '</button>';
+        }).join('') + '</div>'
+        + '<input id="pwn" autocomplete="name" placeholder="Имя">'
+        + (cust ? '<input id="pwp" type="tel" inputmode="tel" autocomplete="tel" placeholder="Телефон: +992 90 111 22 33">'
+          + '<small style="display:block;color:var(--mu);margin:-2px 0 8px">Тот номер, которым магазин записывает ваши долги. Вы увидите только свой долг — после того как магазин подтвердит.</small>'
+          : '<small style="display:block;color:var(--mu);margin:-2px 0 8px">Сотрудника подтверждает владелец: после входа впишите телефон.</small>') : '')
+      + '<input id="pwe" type="email" inputmode="email" autocomplete="email" placeholder="Почта">'
+      + '<input id="pww" type="password" autocomplete="' + (up ? 'new-password' : 'current-password') + '" placeholder="' + (up ? 'Пароль — не короче 8 знаков' : 'Пароль') + '">'
+      + '<button class="go" id="pwgo" type="button" style="width:100%;background:var(--card);color:var(--tx);border:1px solid var(--bd)">' + (up ? 'Создать аккаунт' : 'Войти по почте') + '</button>';
+    [].forEach.call(document.querySelectorAll('#pwt [data-v]'), function (b) { b.onclick = function () { pwTab = b.dataset.v; pwBlock(); }; });
+    [].forEach.call(document.querySelectorAll('#pwr [data-r]'), function (b) {
+      b.onclick = function () {
+        var keep = { n: $('pwn').value, e: $('pwe').value };
+        pwRole = b.dataset.r; pwBlock();
+        $('pwn').value = keep.n; $('pwe').value = keep.e;
+      };
+    });
+    var go = function () {
+      var b = $('pwgo'), label = b.textContent, ae = $('ae');
+      b.disabled = true; b.textContent = '…'; ae.textContent = '';
+      var q = up ? sb.auth.signUp({ role: pwRole, name: $('pwn').value, phone: $('pwp') ? $('pwp').value : '', email: $('pwe').value, password: $('pww').value })
+        : sb.auth.signInWithPassword({ email: $('pwe').value, password: $('pww').value });
+      q.then(function (r) {
+        if (!r || !r.error) { location.reload(); return; }
+        ae.textContent = /^network/.test(r.error.message || '') ? 'Нет связи с сервером. Попробуйте ещё раз' : r.error.message;
+        b.disabled = false; b.textContent = label;
+        if (ae.scrollIntoView) ae.scrollIntoView({ block: 'center' });
+      });
+    };
+    $('pwgo').onclick = go;
+    $('pww').onkeydown = function (e) { if (e.key === 'Enter') go(); };
+  }
+
+  // Покупатель: вместо склада — его долг. Сервер отдаёт только его записи (public.my_debt)
+  function startCustomer() {
+    var shown = false;
+    var go = function () {
+      sb.rpc('my_debt').then(function (r) {
+        var d = r && r.data;
+        if (r.error || !d) {
+          if (shown) return;                        // уже на экране — оставляем, обновим позже
+          screen('<div class="empty">Нет связи с магазином. Проверьте интернет.</div><button class="go ac" id="cuRt" style="width:100%">Ещё раз</button>');
+          document.getElementById('cuRt').onclick = go;
+          return;
+        }
+        shown = true;
+        root.SkladCustomer.render({ name: d.name || ((session.user.user_metadata || {}).full_name || ''), status: d.status, biz: d.biz, ownerPhone: d.owner_phone, person: d.person, ops: d.ops },
+          { logout: function () { root.skladAuth.signOut(); }, refresh: go });
+      });
+    };
+    go();
+    // подтвердили или записали долг — экран обновится сам
+    sb.channel('customer').on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, go)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'docs' }, go).subscribe();
   }
   function startApp() {
     var a = document.getElementById('auth'), app = document.getElementById('app');
@@ -315,6 +393,7 @@
         }
       } catch (e) {}
       if (history.replaceState) history.replaceState(null, '', location.pathname);
+      if (session.user.kind === 'customer') { startCustomer(); return; }
       startApp();
     }, function () {
       session = null;

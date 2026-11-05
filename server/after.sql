@@ -168,3 +168,80 @@ begin
   return format('Перенесено: людей %s, в команде %s, документов %s, записей ленты %s', n_users, n_staff, n_docs, n_act);
 end $$;
 revoke all on function srv.import_supabase(jsonb) from public, anon, authenticated;
+
+-- ---------- Покупатели ----------
+-- Покупатель входит по почте и паролю и видит только свой долг. Сам привязаться к
+-- чужим долгам он не может: владелец подтверждает его и выбирает человека из «Долгов»
+-- (pid). Склад, долги других, команду и ленту покупатель не видит: правила этих таблиц
+-- пускают только сотрудников (is_active), а покупатель — не сотрудник.
+create table if not exists public.customers (
+  uid    uuid   primary key references auth.users(id) on delete cascade,
+  name   text   not null default '',
+  phone  text   not null default '',
+  status text   not null default 'pending' check (status in ('pending','active','blocked')),
+  pid    text,
+  t      bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+grant select, insert, update on public.customers to authenticated;
+alter table public.customers enable row level security;
+drop policy if exists customers_read   on public.customers;
+drop policy if exists customers_insert on public.customers;
+drop policy if exists customers_update on public.customers;
+create policy customers_read   on public.customers for select using (uid = auth.uid() or public.is_owner());
+create policy customers_insert on public.customers for insert with check (uid = auth.uid());
+create policy customers_update on public.customers for update using (uid = auth.uid() or public.is_owner())
+  with check (uid = auth.uid() or public.is_owner());
+
+-- Статус и чьи долги — решает только хозяин; покупатель может поправить имя и телефон
+create or replace function public.customers_guard() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    new.uid := auth.uid();
+    if new.uid is null then raise exception 'not authenticated'; end if;
+    new.status := 'pending';
+    new.pid := null;
+  else
+    new.uid := old.uid;
+    if not public.is_owner() then
+      new.status := old.status;
+      new.pid := old.pid;
+    end if;
+  end if;
+  new.name := left(trim(coalesce(new.name, '')), 60);
+  new.phone := left(trim(coalesce(new.phone, '')), 20);
+  if new.status <> 'active' then new.pid := null; end if;
+  return new;
+end $$;
+drop trigger if exists customers_guard on public.customers;
+create trigger customers_guard before insert or update on public.customers
+  for each row execute function public.customers_guard();
+
+-- Долг покупателя: только его записи. Весь документ долгов ему не уходит — только
+-- имя его человека, его записи, название магазина и телефон хозяина для связи
+create or replace function public.my_debt() returns jsonb
+  language plpgsql stable security definer set search_path = public as $$
+declare c public.customers; d jsonb; p jsonb;
+begin
+  select * into c from public.customers where uid = auth.uid();
+  if not found then return null; end if;
+  select data into d from public.docs where id = 'debts';
+  if c.status = 'active' and c.pid is not null then
+    select x into p from jsonb_array_elements(coalesce(d->'people', '[]'::jsonb)) x where x->>'id' = c.pid limit 1;
+  end if;
+  return jsonb_build_object(
+    'name', c.name, 'status', c.status,
+    'biz', coalesce((select data->>'biz' from public.docs where id = 'main'), ''),
+    'owner_phone', coalesce((select phone from public.staff where owner limit 1), ''),
+    'person', case when p is null then null else jsonb_build_object('name', p->>'name') end,
+    'ops', case when p is null then '[]'::jsonb else coalesce((
+      select jsonb_agg(jsonb_build_object('type', o->>'type', 'amt', (o->>'amt')::numeric, 't', (o->>'t')::bigint,
+                                          'due', coalesce(o->>'due', ''), 'note', coalesce(o->>'note', '')))
+        from jsonb_array_elements(coalesce(d->'ops', '[]'::jsonb)) o where o->>'pid' = c.pid), '[]'::jsonb) end);
+end $$;
+revoke all on function public.customers_guard() from public, anon, authenticated;
+revoke all on function public.my_debt() from public, anon;
+grant execute on function public.my_debt() to authenticated;
+
+drop trigger if exists sklad_notify on public.customers;
+create trigger sklad_notify after insert or update or delete on public.customers for each row execute function srv.notify();

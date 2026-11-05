@@ -20,6 +20,10 @@ create table if not exists auth.users (
   created_at         timestamptz not null default now(),
   last_sign_in_at    timestamptz
 );
+-- Вход по почте и паролю: здесь только отпечаток пароля (scrypt с солью), сам пароль — нигде.
+-- Почта при таком входе не подтверждена Google (email_confirmed_at пуст), поэтому стать
+-- по ней хозяином нельзя (may_claim_owner в schema.sql)
+alter table auth.users add column if not exists pass_hash text;
 create or replace function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 

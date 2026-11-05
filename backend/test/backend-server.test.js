@@ -172,7 +172,7 @@ test('config.js { api } включает свой сервер: экран вх�
   const els = {};
   const el = (id) => els[id] || (els[id] = { id, style: {}, innerHTML: '', textContent: '', onclick: null, disabled: false });
   global.window = global;
-  global.document = { readyState: 'complete', getElementById: el, addEventListener() {}, body: { appendChild() {} }, createElement: () => ({}) };
+  global.document = { readyState: 'complete', getElementById: el, addEventListener() {}, body: { appendChild() {} }, createElement: () => ({}), querySelectorAll: () => [] };
   let куда = null;
   global.location = { search: '', hash: '', pathname: '/', href: 'https://skladgo.vercel.app/', reload() {}, assign: (u) => { куда = u; } };
   global.history = { replaceState() {} };

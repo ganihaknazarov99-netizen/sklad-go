@@ -3,13 +3,15 @@
    аккаунты здесь, а склад и долги — показательные (demo.js). Так оба входа можно
    проверить без Google и без сервера.
 
-   Покупатель видит только свой долг. Сам привязаться к чужим долгам он не может:
-   после регистрации владелец подтверждает его и выбирает, чьи это долги (подсказка —
-   по телефону). На настоящем сервере это потом будет делать сервер, а не браузер. */
+   Экраны те же, что в магазине: экран покупателя — customer.js, раздел «Покупатели»
+   у хозяина — app.js. Здесь подменены только данные: аккаунты в этом браузере вместо
+   сервера. Покупатель сам привязаться к чужим долгам не может: хозяин подтверждает его
+   и выбирает, чьи это долги (подсказка — по телефону). */
 (function (root) {
   'use strict';
   var ACC = 'skladgo.mock.accounts', SES = 'skladgo.mock.session';
   var ROLES = { owner: '🏪 Владелец магазина', customer: '🛍 Покупатель' };
+  var MIN = 8;   // как на сервере
 
   /* ---------- Аккаунты ---------- */
   function get(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
@@ -37,7 +39,7 @@
     if (!name) return no('Впишите имя');
     if (o.role === 'customer' && digits(phone).length < 11) return no('Впишите телефон — по нему магазин найдёт ваши долги');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return no('Проверьте почту');
-    if (String(o.password || '').length < 6) return no('Пароль — не короче 6 знаков');
+    if (String(o.password || '').length < MIN) return no('Пароль — не короче ' + MIN + ' знаков');
     if (accounts().some(function (x) { return x.email === email; })) return no('Аккаунт с этой почтой уже есть — войдите');
     // хозяин у магазина один, как и на настоящем сервере
     if (o.role === 'owner' && accounts().some(function (x) { return x.role === 'owner'; })) return no('У магазина уже есть владелец. Зарегистрируйтесь как покупатель');
@@ -67,30 +69,17 @@
     put(ACC, a);
   }
 
-  /* ---------- Долг покупателя ----------
-     Только записи его человека из «Долгов». На сервере это будет отдельный запрос,
-     который отдаёт покупателю его строки: весь документ долгов ему не уйдёт */
+  // Долг покупателя: только записи его человека из «Долгов» — как public.my_debt на сервере
   function customerDebt(acc, D) {
     var p = acc && acc.status === 'active' && acc.pid && ((D && D.people) || []).filter(function (x) { return x.id === acc.pid; })[0];
     if (!p) return null;
-    var ops = (D.ops || []).filter(function (o) { return o.pid === p.id; }).sort(function (a, b) { return b.t - a.t; });
-    var bal = Math.round(ops.reduce(function (s, o) { return s + (o.type === 'give' ? o.amt : -o.amt); }, 0) * 100) / 100;
-    var today = new Date().toISOString().slice(0, 10), late = '', next = '';
-    if (bal > 0) ops.forEach(function (o) {
-      if (o.type !== 'give' || !o.due) return;
-      if (o.due < today) { if (!late || o.due < late) late = o.due; }
-      else if (!next || o.due < next) next = o.due;
-    });
-    return { person: p, ops: ops, balance: bal === 0 ? 0 : bal, late: late, next: next };
+    var r = root.SkladCustomer.summarize((D.ops || []).filter(function (o) { return o.pid === p.id; }));
+    r.person = p;
+    return r;
   }
 
   /* ---------- Экран ---------- */
   function $(i) { return document.getElementById(i); }
-  function nt(s) { return '<span data-notr>' + esc(s) + '</span>'; }
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function money(n) { return (Math.round((+n || 0) * 100) / 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + ' сом'; }
-  function ddate(s) { var p = String(s).split('-'); return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : s; }
-  function dtime(t) { return new Date(t).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
   function screen(html) {
     var a = $('auth'), app = $('app');
     if (app) app.style.display = 'none';
@@ -131,17 +120,17 @@
   function loginScreen(msg) {
     var up = tab === 'up';
     screen('<p>Тестовый вход: как владелец магазина или как покупатель. Без Google — по почте и паролю.</p>'
-      + '<div class="seg3" id="mktab" style="margin-bottom:12px"><button type="button" data-v="in" class="' + (up ? '' : 'on') + '">Вход</button><button type="button" data-v="up" class="' + (up ? 'on' : '') + '">Регистрация</button></div>'
+      + '<div class="seg2" id="mktab" style="margin-bottom:12px"><button type="button" data-v="in" class="' + (up ? '' : 'on') + '">Вход</button><button type="button" data-v="up" class="' + (up ? 'on' : '') + '">Регистрация</button></div>'
       + '<div class="err" id="ae"></div>'
       + (up
         ? '<div class="lbl">Кто вы?</div><div class="two" id="mkrole" style="margin-bottom:8px">' + Object.keys(ROLES).map(function (k) {
-            return '<button type="button" class="go" data-r="' + k + '" style="' + (k === role ? '' : 'background:var(--card);color:var(--tx);border:1px solid var(--bd)') + (k === role ? ';background:var(--ac)' : '') + '">' + ROLES[k] + '</button>';
+            return '<button type="button" class="go" data-r="' + k + '" style="' + (k === role ? 'background:var(--ac)' : 'background:var(--card);color:var(--tx);border:1px solid var(--bd)') + '">' + ROLES[k] + '</button>';
           }).join('') + '</div>'
           + '<label for="mkn">Имя</label><input id="mkn" autocomplete="name" placeholder="Напр. Фируз">'
           + '<label for="mkp">Телефон' + (role === 'customer' ? '' : ' (необязательно)') + '</label><input id="mkp" type="tel" inputmode="tel" autocomplete="tel" placeholder="+992 90 111 22 33">'
           + (role === 'customer' ? '<small style="display:block;color:var(--mu);margin:-2px 0 8px">Тот номер, которым магазин записывает ваши долги. Для проверки: 90 111 22 33 — это Фируз из показательных долгов (должен 300 сом).</small>' : '')
           + '<label for="mke">Почта</label><input id="mke" type="email" inputmode="email" autocomplete="email" placeholder="name@gmail.com">'
-          + '<label for="mkw">Пароль</label><input id="mkw" type="password" autocomplete="new-password" placeholder="Не короче 6 знаков">'
+          + '<label for="mkw">Пароль</label><input id="mkw" type="password" autocomplete="new-password" placeholder="Не короче 8 знаков">'
           + '<button class="go ac" id="mkgo" type="button" style="width:100%;margin-top:6px">Создать аккаунт</button>'
         : '<label for="mke">Почта</label><input id="mke" type="email" inputmode="email" autocomplete="email" placeholder="name@gmail.com">'
           + '<label for="mkw">Пароль</label><input id="mkw" type="password" autocomplete="current-password" placeholder="Пароль">'
@@ -176,84 +165,24 @@
   function customerScreen(acc) {
     var D = get('skladgo.debts', { people: [], ops: [] }), shop = get('skladgo.v1', {}) || {};
     var owner = accounts().filter(function (x) { return x.role === 'owner'; })[0];
-    var biz = shop.biz || (owner ? owner.name : 'магазин');
-    var foot = '<button class="link" id="mklo" type="button" style="display:block;margin:16px auto 0">Выйти</button>' + langLinks();
-    if (acc.status === 'blocked') {
-      screen('<p>Здравствуйте, ' + nt(acc.name) + '!</p><div class="empty">⛔ Магазин отклонил ваш аккаунт. Если это ошибка — свяжитесь с магазином.</div>' + foot);
-    } else if (acc.status !== 'active') {
-      screen('<p>Здравствуйте, ' + nt(acc.name) + '!</p><div class="empty">⏳ Магазин «' + nt(biz) + '» ещё не подтвердил ваш аккаунт. Как только подтвердит — здесь появится ваш долг.</div>'
-        + '<button class="go ac" id="mkrf" type="button" style="width:100%">Проверить снова</button>' + foot);
-      $('mkrf').onclick = function () { customerScreen(current() || acc); };
-    } else {
-      var r = customerDebt(acc, D), h = '<p>Здравствуйте, ' + nt(acc.name) + '! Магазин: <b>' + nt(biz) + '</b></p>';
-      if (!r) h += '<div class="empty">Магазин подтвердил вас, но ещё не связал с записями о долгах.</div>';
-      else {
-        var b = r.balance;
-        h += '<div class="card" style="display:block;text-align:center;padding:16px"><small style="color:var(--mu)">' + (b > 0 ? 'Ваш долг магазину' : b < 0 ? 'Магазин должен вам' : 'Долгов нет') + '</small>'
-          + '<div style="font-size:34px;font-weight:800;margin:4px 0;color:' + (b > 0 ? 'var(--out)' : b < 0 ? 'var(--in)' : 'var(--tx)') + '">' + (b ? money(Math.abs(b)) : '✓ 0 сом') + '</div>'
-          + (r.late ? '<small style="color:var(--out);font-weight:700">⏰ Срок возврата прошёл: ' + ddate(r.late) + '</small>'
-            : r.next ? '<small style="color:var(--mu)">Вернуть до ' + ddate(r.next) + '</small>' : '') + '</div>';
-        h += '<div class="lbl">История</div>' + (r.ops.length ? r.ops.map(function (o) {
-          return '<div class="log"><div><b>' + (o.type === 'give' ? '🛍 В долг' : '💵 Оплата') + '</b><small>' + nt(o.note || '') + (o.due && o.type === 'give' ? ' · вернуть до ' + ddate(o.due) : '') + '</small></div>'
-            + '<span style="text-align:right"><b style="color:' + (o.type === 'give' ? 'var(--out)' : 'var(--in)') + '">' + (o.type === 'give' ? '+' : '−') + money(o.amt) + '</b><br><small style="color:var(--mu)">' + dtime(o.t) + '</small></span></div>';
-        }).join('') : '<div class="empty">Записей пока нет</div>');
-      }
-      if (owner && owner.phone) {
-        var dg = digits(owner.phone);
-        h += '<div class="two" style="margin-top:12px"><a class="go" style="background:var(--card);color:var(--tx);border:1px solid var(--bd);text-align:center;text-decoration:none" href="tel:+' + dg + '">📞 Позвонить</a>'
-          + '<a class="go" style="background:#25d366;text-align:center;text-decoration:none" href="https://wa.me/' + dg + '" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a></div>';
-      }
-      screen(h + foot);
-    }
-    $('mklo').onclick = function () { logout(); location.reload(); };
-    bindLang();
-  }
-
-  /* ---------- Владелец: покупатели в «Команде» ---------- */
-  function teamExtra() {
-    var C = accounts().filter(function (x) { return x.role === 'customer'; });
-    var people = (root.D && root.D.people) || [];
-    var pd = C.filter(function (x) { return x.status === 'pending'; }), ac = C.filter(function (x) { return x.status === 'active'; });
-    var h = '<div class="lbl">🛍 Покупатели (' + (pd.length + ac.length) + ')</div>';
-    if (!pd.length && !ac.length) h += '<div class="empty">Покупатели появятся здесь после регистрации. Они увидят только свой долг</div>';
-    pd.forEach(function (x) {
-      var m = people.filter(function (p) { return p.phone && digits(p.phone) === digits(x.phone); })[0];
-      h += '<div class="card" style="display:block"><div class="info"><b>⏳ ' + nt(x.name) + '</b><small>' + esc(x.phone) + ' · ' + esc(x.email) + '</small></div>'
-        + '<select id="mkp_' + x.id + '" style="margin:8px 0"><option value="">Чьи это долги? — выберите человека</option>' + people.map(function (p) {
-          return '<option value="' + p.id + '"' + (m && m.id === p.id ? ' selected' : '') + '>' + esc(p.name) + (p.phone ? ' · ' + esc(p.phone) : '') + '</option>';
-        }).join('') + '</select>'
-        + (m ? '<small style="color:var(--in)">✓ Телефон совпал с «' + nt(m.name) + '»</small>' : '<small style="color:var(--mu)">Телефон ни с кем в «Долгах» не совпал — проверьте, тот ли это человек</small>')
-        + '<div class="two" style="margin-top:8px"><button class="go ac" type="button" data-mka="' + x.id + '">✓ Подтвердить</button><button class="go" type="button" data-mkb="' + x.id + '" style="background:var(--card);color:var(--out);border:1px solid var(--bd)">✕ Отклонить</button></div></div>';
-    });
-    ac.forEach(function (x) {
-      var p = people.filter(function (q) { return q.id === x.pid; })[0];
-      h += '<div class="card"><div class="info"><b>🛍 ' + nt(x.name) + '</b><small>' + esc(x.phone) + ' · видит долги: ' + (p ? nt(p.name) : '—') + '</small></div><button class="link del" type="button" data-mku="' + x.id + '">Отвязать</button></div>';
-    });
-    return h;
-  }
-  function teamBind() {
-    var name = function (id) { var a = accounts().filter(function (x) { return x.id === id; })[0]; return a ? a.name : ''; };
-    [].forEach.call(document.querySelectorAll('[data-mka]'), function (b) {
-      b.onclick = function () {
-        var id = b.dataset.mka, pid = $('mkp_' + id).value;
-        if (!pid) { root.toast('⚠️ Выберите, чьи это долги'); return; }
-        update(id, { status: 'active', pid: pid });
-        root.logAct('подтвердил покупателя: ' + name(id));
-        root.toast('✓ Покупатель подтверждён: ' + name(id));
-        root.render();
-      };
-    });
-    [].forEach.call(document.querySelectorAll('[data-mkb]'), function (b) {
-      b.onclick = function () { update(b.dataset.mkb, { status: 'blocked', pid: null }); root.logAct('отклонил покупателя: ' + name(b.dataset.mkb)); root.render(); };
-    });
-    [].forEach.call(document.querySelectorAll('[data-mku]'), function (b) {
-      b.onclick = function () {
-        if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Точно?'; return; }
-        update(b.dataset.mku, { status: 'pending', pid: null }); root.logAct('отвязал покупателя: ' + name(b.dataset.mku)); root.render();
-      };
+    var r = customerDebt(acc, D);
+    root.SkladCustomer.render({
+      name: acc.name, status: acc.status, biz: shop.biz || (owner ? owner.name : ''), ownerPhone: owner ? owner.phone : '',
+      person: r ? { name: r.person.name } : null, ops: r ? r.ops : [],
+    }, {
+      logout: function () { logout(); location.reload(); },
+      refresh: function () { customerScreen(current() || acc); },
     });
   }
 
+  /* ---------- Владелец: покупатели в «Команде» ----------
+     Раздел рисует app.js (custHtml) — здесь только данные из этого браузера */
+  function custSync() {
+    root.custList = accounts().filter(function (x) { return x.role === 'customer'; }).map(function (x) {
+      return { uid: x.id, name: x.name, phone: x.phone, email: x.email, status: x.status, pid: x.pid };
+    });
+    root.custOn = true;
+  }
   function ownerApp(acc) {
     seed().then(function () {
       try { localStorage.setItem('skladgo.me', JSON.stringify({ name: acc.name, phone: acc.phone, mail: acc.email })); } catch (e) {}
@@ -261,9 +190,16 @@
       $('app').style.display = '';
       var out = function () { logout(); location.reload(); };
       root.skladAuth = { signOut: out, switchAccount: out, deleteAccount: function () { return Promise.reject(new Error('Владелец не может удалить свой аккаунт')); } };
-      root.skladTeamExtra = teamExtra;
-      root.skladTeamBind = teamBind;
       return root.skladDemoStart();
+    }).then(function () {
+      root.custSet = function (uid, ch, done) {
+        update(uid, ch.status === 'active' ? ch : { status: ch.status, pid: null });
+        custSync();
+        if (done) done();
+        root.render();
+      };
+      custSync();
+      root.render();
     });
   }
 

@@ -15,10 +15,11 @@
     // Ответ сервера → { data, error } как у Supabase. Сервер не ответил или ответил 5xx
     // (Railway перезапускается, Vercel не достучался) — это «нет связи»: данные остаются
     // на телефоне и уйдут позже, а не теряются как «ошибка»
+    // path с /auth/… — вход на этом же сайте, остальное — данные под /api
     function call(method, path, body) {
       var o = { method: method, credentials: 'same-origin', headers: { 'X-Sklad': '1' } };
       if (body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); }
-      return fetch(base + path, o).then(function (r) {
+      return fetch((path.indexOf('/auth/') === 0 ? authBase : base) + path, o).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
           if (r.status >= 500 || !j || (!('data' in j) && !j.error)) return { data: null, error: { message: 'network: сервер не ответил (' + r.status + ')' } };
           if (j.error) return { data: null, error: { message: j.error.message || '', code: j.error.code, status: r.status } };
@@ -122,7 +123,8 @@
           // нет связи — пусть backend.js откроет склад из памяти телефона
           if (r.error && /^network/.test(r.error.message)) return { data: { session: null }, error: { name: 'AuthRetryableFetchError', message: r.error.message } };
           if (!r.data) return { data: { session: null }, error: null };
-          return { data: { session: { user: { id: r.data.id, email: r.data.email || '', user_metadata: { full_name: r.data.name || '' } } } }, error: null };
+          return { data: { session: { user: { id: r.data.id, email: r.data.email || '', user_metadata: { full_name: r.data.name || '' },
+            kind: r.data.kind || 'staff', has_password: !!r.data.has_password } } }, error: null };
         });
       },
       // Вход ведёт сервер: он отправит к Google (со списком аккаунтов) и вернёт сюда
@@ -133,6 +135,10 @@
         return Promise.resolve({ data: {}, error: null });
       },
       signOut: function () { return call('POST', '/logout').then(function (r) { return { error: r.error }; }); },
+      // Вход и регистрация по почте и паролю. Cookie входа ставит сервер — здесь ничего не храним
+      signInWithPassword: function (o) { return call('POST', '/auth/password/login', { email: o.email, password: o.password }); },
+      signUp: function (o) { return call('POST', '/auth/password/signup', { role: o.role, name: o.name, phone: o.phone, email: o.email, password: o.password }); },
+      setPassword: function (pass, current) { return call('POST', '/password', { password: pass, current: current }); },
       onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () {} } } }; }
     };
 
