@@ -181,6 +181,20 @@
         });
       } : undefined,
       hasPassword: function () { return !!(session && session.user.has_password); },
+      hasTotp: function () { return !!(session && session.user.has_totp); },
+      totpStart: sb.auth.totpStart ? function (pass) {
+        return sb.auth.totpStart(pass).then(function (r) { if (r.error) throw new Error(r.error.message || 'Не удалось'); return r.data; });
+      } : undefined,
+      totpConfirm: sb.auth.totpConfirm ? function (code) {
+        return sb.auth.totpConfirm(code).then(function (r) { if (r.error) throw new Error(r.error.message || 'Не удалось'); if (session) session.user.has_totp = true; });
+      } : undefined,
+      totpOff: sb.auth.totpOff ? function (pass) {
+        return sb.auth.totpOff(pass).then(function (r) { if (r.error) throw new Error(r.error.message || 'Не удалось'); if (session) session.user.has_totp = false; });
+      } : undefined,
+      // Потеряли телефон — выйти везде. Этот телефон тоже выходит, его данные стираются, как при выходе
+      logoutAll: sb.auth.logoutAll ? function () {
+        return sb.auth.logoutAll().then(function (r) { if (r.error) throw new Error(r.error.message || 'Нет связи'); wipeLocal(); location.reload(); });
+      } : undefined,
       deleteAccount: function () {
         return sb.rpc('delete_my_account').then(function (r) {
           if (r.error) throw new Error(/owner_cannot_delete/.test(r.error.message || '') ? 'Владелец не может удалить свой аккаунт' : 'Не удалось удалить аккаунт');
@@ -251,7 +265,7 @@
   /* ---------- Вход по почте и паролю (только свой сервер) ----------
      Покупатели входят так: им Gmail магазина ни к чему. Сотрудник тоже может, а хозяин и
      продавцы, вошедшие через Google, задают пароль во вкладке «Команда» */
-  var pwTab = 'in', pwRole = 'customer', PWR = { customer: '🛍 Покупатель', staff: '👤 Сотрудник магазина' };
+  var pwTab = 'in', pwRole = 'customer', pwCode = false, PWR = { customer: '🛍 Покупатель', staff: '👤 Сотрудник магазина' };
   function pwBlock() {
     var box = document.getElementById('pwb');
     if (!box || !cfg.api || !sb.auth.signInWithPassword) return;
@@ -267,8 +281,10 @@
           : '<small style="display:block;color:var(--mu);margin:-2px 0 8px">Сотрудника подтверждает владелец: после входа впишите телефон.</small>') : '')
       + '<input id="pwe" type="email" inputmode="email" autocomplete="email" placeholder="Почта">'
       + '<input id="pww" type="password" autocomplete="' + (up ? 'new-password' : 'current-password') + '" placeholder="' + (up ? 'Пароль — не короче 8 знаков' : 'Пароль') + '">'
+      // второй шаг: 6 цифр из Google Authenticator — сервер попросит, если код включён
+      + (!up && pwCode ? '<input id="pwc" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Код из приложения — 6 цифр">' : '')
       + '<button class="go" id="pwgo" type="button" style="width:100%;background:var(--card);color:var(--tx);border:1px solid var(--bd)">' + (up ? 'Создать аккаунт' : 'Войти по почте') + '</button>';
-    [].forEach.call(document.querySelectorAll('#pwt [data-v]'), function (b) { b.onclick = function () { pwTab = b.dataset.v; pwBlock(); }; });
+    [].forEach.call(document.querySelectorAll('#pwt [data-v]'), function (b) { b.onclick = function () { pwTab = b.dataset.v; pwCode = false; pwBlock(); }; });
     [].forEach.call(document.querySelectorAll('#pwr [data-r]'), function (b) {
       b.onclick = function () {
         var keep = { n: $('pwn').value, e: $('pwe').value };
@@ -280,9 +296,18 @@
       var b = $('pwgo'), label = b.textContent, ae = $('ae');
       b.disabled = true; b.textContent = '…'; ae.textContent = '';
       var q = up ? sb.auth.signUp({ role: pwRole, name: $('pwn').value, phone: $('pwp') ? $('pwp').value : '', email: $('pwe').value, password: $('pww').value })
-        : sb.auth.signInWithPassword({ email: $('pwe').value, password: $('pww').value });
+        : sb.auth.signInWithPassword({ email: $('pwe').value, password: $('pww').value, code: $('pwc') ? $('pwc').value : undefined });
       q.then(function (r) {
         if (!r || !r.error) { location.reload(); return; }
+        if (!up && (r.error.code === 'need_code' || r.error.code === 'bad_code') && !pwCode) {
+          // пароль верный — нужен код: показываем поле, почту и пароль не теряем
+          var keep = { e: $('pwe').value, w: $('pww').value };
+          pwCode = true; pwBlock();
+          $('pwe').value = keep.e; $('pww').value = keep.w;
+          $('ae').textContent = 'Введите 6 цифр из приложения Google Authenticator';
+          $('pwc').focus();
+          return;
+        }
         ae.textContent = /^network/.test(r.error.message || '') ? 'Нет связи с сервером. Попробуйте ещё раз' : r.error.message;
         b.disabled = false; b.textContent = label;
         if (ae.scrollIntoView) ae.scrollIntoView({ block: 'center' });
@@ -290,6 +315,7 @@
     };
     $('pwgo').onclick = go;
     $('pww').onkeydown = function (e) { if (e.key === 'Enter') go(); };
+    if ($('pwc')) $('pwc').onkeydown = function (e) { if (e.key === 'Enter') go(); };
   }
 
   // Покупатель: вместо склада — его долг. Сервер отдаёт только его записи (public.my_debt)

@@ -10,6 +10,9 @@
    паролю. Тестовый хозяин (только для этой проверки, не настоящий пароль):
      почта   owner@test.tj
      пароль  test-owner-1
+     код     хозяину по паролю нужен ещё код из приложения. В Google Authenticator:
+             «＋» → «Ввести ключ настройки» → ключ BG2Z OM4O T24S CXVN MWZW 6JF6 4E7Q MLLH
+             (тестовый ключ этой копии; настоящий ключ магазина у вас будет свой)
    В показательных долгах Фируз записан с телефоном +992 90 111 22 33 — регистрируйтесь
    покупателем с этим номером, и хозяин увидит подсказку «телефон совпал». */
 const http = require('node:http');
@@ -23,7 +26,8 @@ const { createApp } = require('./app');
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT) || 8787;
 const ORIGIN = 'http://127.0.0.1:' + PORT;
-const OWNER = { id: '11111111-1111-1111-1111-111111111111', email: 'owner@test.tj', password: 'test-owner-1', name: 'Гани (тест)', phone: '+992900097337' };
+const OWNER = { id: '11111111-1111-1111-1111-111111111111', email: 'owner@test.tj', password: 'test-owner-1', name: 'Гани (тест)', phone: '+992900097337',
+  totp: 'BG2ZOM4OT24SCXVNMWZW6JF64E7QMLLH' };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 
@@ -34,8 +38,8 @@ function scrypt(pass) {
 
 async function seed(pg, db) {
   await pg.query("insert into public.settings values ('owner_email', $1)", [OWNER.email]);
-  await pg.query('insert into auth.users (id, email, email_confirmed_at, name, pass_hash) values ($1, $2, now(), $3, $4)',
-    [OWNER.id, OWNER.email, OWNER.name, scrypt(OWNER.password)]);
+  await pg.query('insert into auth.users (id, email, email_confirmed_at, name, pass_hash, totp_secret) values ($1, $2, now(), $3, $4, $5)',
+    [OWNER.id, OWNER.email, OWNER.name, scrypt(OWNER.password), OWNER.totp]);
   await db.asUser(OWNER.id, (q) => q('insert into public.staff (name, phone, mail) values ($1, $2, $3)', [OWNER.name, OWNER.phone, OWNER.email]));
   const day = 864e5, now = Date.now(), iso = (d) => new Date(now + d * day).toISOString().slice(0, 10);
   let n = 0;

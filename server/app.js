@@ -11,6 +11,7 @@
    Ответы — как у Supabase: { data } или { error: { code, message } }, чтобы backend.js
    разбирал их так же, как раньше. */
 const crypto = require('node:crypto');
+const TOTP = require('./totp');
 
 const СЕССИЯ_ДНЕЙ = 180;
 const ПРОДЛИТЬ_ЗА = 170;              // осталось меньше 170 дней — продлеваем до полных 180
@@ -300,10 +301,59 @@ function createApp(o) {
       неудача(key);
       return нет(res, 401, 'bad_login', 'Неверная почта или пароль');
     }
+    // Второй шаг: код из приложения. Включён — без кода не пускаем. Хозяин без кода по паролю
+    // не входит вовсе: у него есть Google с его подтверждением, а пароль один — лёгкая добыча
+    const u = (await db.base('select totp_secret, totp_step from auth.users where id = $1', [r[0].id]))[0];
+    if (u.totp_secret) {
+      if (!String(a.code || '').trim()) return нет(res, 401, 'need_code', 'Введите код из приложения');
+      const step = TOTP.verify(u.totp_secret, a.code, сейчас(), Number(u.totp_step));
+      if (step === null) {
+        неудача(key);
+        return нет(res, 401, 'bad_code', 'Код не подходит. Введите новый код из приложения');
+      }
+      await db.base('update auth.users set totp_step = $2 where id = $1', [r[0].id, step]);
+    } else if (await хозяин(r[0].id)) {
+      return нет(res, 403, 'owner_needs_code', 'Хозяин входит по паролю только с кодом из приложения. Войдите через Google и включите код во вкладке «Команда»');
+    }
     неудачи.delete(key);
     await db.base('update auth.users set last_sign_in_at = now() where id = $1', [r[0].id]);
     await сессия(res, r[0].id);
     return ok(res, { id: r[0].id });
+  }
+  async function хозяин(uid) {
+    const r = await db.base('select owner from public.staff where uid = $1', [uid]);
+    return !!(r[0] && r[0].owner);
+  }
+  // Включить и выключить код может только хозяин и только зная пароль: если кто-то завладел
+  // его открытым телефоном, тихо подменить второй шаг не выйдет
+  async function парольВерен(res, me, pass) {
+    const r = await db.base('select pass_hash from auth.users where id = $1', [me.id]);
+    if (!r[0] || !r[0].pass_hash) { нет(res, 400, 'no_password', 'Сначала задайте пароль для входа по почте'); return false; }
+    const key = 'pw|' + me.id;
+    if (много(key)) { нет(res, 429, 'rate_limited', 'Слишком много попыток. Подождите 15 минут'); return false; }
+    if (!(await верен(pass || '', r[0].pass_hash))) { неудача(key); нет(res, 403, 'bad_login', 'Пароль не подходит'); return false; }
+    return true;
+  }
+  async function код(req, res, me, what) {
+    if (!(await хозяин(me.id))) return нет(res, 403, 'forbidden', 'Код из приложения — для хозяина');
+    const a = await body(req);
+    if (what === 'start') {
+      if (!(await парольВерен(res, me, a.password))) return;
+      const secret = TOTP.newSecret();
+      await db.base('update auth.users set totp_pending = $2 where id = $1', [me.id, secret]);
+      return ok(res, { secret, uri: TOTP.otpauthUri(secret, me.email || '') });
+    }
+    if (what === 'confirm') {
+      const r = (await db.base('select totp_pending from auth.users where id = $1', [me.id]))[0];
+      if (!r || !r.totp_pending) return нет(res, 400, 'bad_request', 'Начните заново: «Включить код»');
+      const step = TOTP.verify(r.totp_pending, a.code, сейчас(), -1);
+      if (step === null) return нет(res, 400, 'bad_code', 'Код не подходит. Проверьте, что время на телефоне верное, и введите новый код');
+      await db.base('update auth.users set totp_secret = totp_pending, totp_pending = null, totp_step = $2 where id = $1', [me.id, step]);
+      return ok(res, null);
+    }
+    if (!(await парольВерен(res, me, a.password))) return;
+    await db.base('update auth.users set totp_secret = null, totp_pending = null, totp_step = -1 where id = $1', [me.id]);
+    return ok(res, null);
   }
 
   // Задать или сменить пароль, будучи внутри. Был пароль — нужен прежний
@@ -318,6 +368,8 @@ function createApp(o) {
       if (!(await верен(a.current || '', r[0].pass_hash))) { неудача(key); return нет(res, 403, 'bad_login', 'Прежний пароль не подходит'); }
     }
     await db.base('update auth.users set pass_hash = $2 where id = $1', [me.id, await запароль(pass)]);
+    // новый пароль — старые входы на других телефонах больше не действуют
+    await db.base('delete from srv.sessions where user_id = $1 and token_hash <> $2', [me.id, hash(me.token)]);
     return ok(res, null);
   }
 
@@ -446,13 +498,23 @@ function createApp(o) {
         if (!me) return нет(res, 401, 'not authenticated', 'Нужно войти');
         // покупатель или нет — от этого зависит, какой экран показать после входа
         const k = await db.base(`select exists (select 1 from public.customers where uid = $1) as c,
-            (select pass_hash is not null from auth.users where id = $1) as pw`, [me.id]);
-        return ok(res, { id: me.id, email: me.email, name: me.name, kind: k[0].c ? 'customer' : 'staff', has_password: !!k[0].pw });
+            (select pass_hash is not null from auth.users where id = $1) as pw,
+            (select totp_secret is not null from auth.users where id = $1) as totp`, [me.id]);
+        return ok(res, { id: me.id, email: me.email, name: me.name, kind: k[0].c ? 'customer' : 'staff', has_password: !!k[0].pw, has_totp: !!k[0].totp });
       }
       if (p === '/api/logout' && req.method === 'POST') { await выйти(res, me); return ok(res, null); }
       if (!me) return нет(res, 401, 'not authenticated', 'Нужно войти');
       if (p === '/api/events' && req.method === 'GET') return events(req, res, me);
       if (p === '/api/password' && req.method === 'POST') return await смена(req, res, me);
+      const t = /^\/api\/totp\/(start|confirm|off)$/.exec(p);
+      if (t && req.method === 'POST') return await код(req, res, me, t[1]);
+      // Потеряли телефон — выйти везде, где был вход этого человека
+      if (p === '/api/logout_all' && req.method === 'POST') {
+        await db.base('delete from srv.sessions where user_id = $1', [me.id]);
+        закрыть(me.id);
+        cookie(res, 'sg_s', '', 0, '/');
+        return ok(res, null);
+      }
 
       const m = /^\/api\/(rpc|docs|staff|activity|customers)(?:\/([^/]+))?$/.exec(p);
       if (!m) return нет(res, 404, 'not_found', 'Нет такого адреса');

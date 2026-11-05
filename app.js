@@ -1265,6 +1265,9 @@ function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h='<h1>Команда</h1><div class="card"><div class="info"><b>'+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?'Владелец · ':'Сотрудник · ')+esc(ME.phone)+' · '+esc(ME.mail)+'</small></div><button class="link" id="me">Изменить</button></div>';
   if(window.skladAuth&&skladAuth.setPassword)h+='<button class="link" id="pwset" style="display:block">🔑 '+(skladAuth.hasPassword()?'Сменить пароль для входа по почте':'Пароль для входа по почте')+'</button>';
+  // хозяину вход по паролю — только с кодом из приложения (сервер так и требует)
+  if(isOwn&&window.skladAuth&&skladAuth.totpStart)h+='<div class="card"'+(skladAuth.hasTotp()?'':' style="border-color:var(--out)"')+'><div class="info"><b>🔐 Код из приложения</b><small>'+(skladAuth.hasTotp()?'Включён: вход по паролю — только с 6 цифрами из Google Authenticator':'Выключен: по паролю вы не войдёте — только через Google. Включите, чтобы входить по паролю и коду')+'</small></div><button class="link'+(skladAuth.hasTotp()?' del':'')+'" id="totp" type="button">'+(skladAuth.hasTotp()?'Выключить':'Включить')+'</button></div>';
+  if(window.skladAuth&&skladAuth.logoutAll)h+='<button class="link" id="loall" style="display:block">🚪 Выйти на всех устройствах</button>';
   if(window.skladAuth)h+='<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px"><button class="link" id="lo">Выйти</button><button class="link" id="swa">🔄 Сменить аккаунт</button>'+(isOwn?'':'<button class="link del" id="da">🗑 Удалить мой аккаунт</button>')+'</div>';
   // Значок на экране телефона. Android и компьютер предлагают установку сами (backend.js ловит это),
   // на iPhone такой кнопки нет — подсказываем, куда нажать
@@ -1302,6 +1305,11 @@ function team(){
   [].forEach.call(document.querySelectorAll('[data-bl]'),function(b){b.onclick=function(){setSt(b.dataset.bl,'blocked')}});
   if(isOwn&&custOn)custBind();
   if($('pwset'))$('pwset').onclick=pwUI;
+  if($('totp'))$('totp').onclick=totpUI;
+  if($('loall'))$('loall').onclick=function(){
+    if(this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='❗ Нажмите ещё раз — выйдут все телефоны, где был ваш вход, и этот тоже';return}
+    this.disabled=true;skladAuth.logoutAll().catch(function(e){toast('⚠️ '+((e&&e.message)||'Нет связи'))});
+  };
   if($('bkd'))$('bkd').onclick=function(){backupDl();toast('💾 Копия скачана — храните файл в надёжном месте');render()};
 }
 /* ===== Покупатели: входят по почте и паролю и видят только свой долг. Хозяин подтверждает
@@ -1355,6 +1363,33 @@ function pwUI(){
     skladAuth.setPassword(a,had?$('pw0').value:undefined).then(function(){close();toast('🔑 Пароль сохранён');render()},function(e){btn.disabled=false;toast('⚠️ '+((e&&e.message)||'Не удалось сохранить'))});
   };
   $('pw1').focus();
+}
+/* Код из приложения (Google Authenticator) к входу хозяина по паролю. Включить и выключить —
+   только с паролем: если кто-то взял ваш открытый телефон, тихо отключить защиту не выйдет.
+   Потеряли телефон с приложением — войдите через Google и включите код заново */
+function totpUI(){
+  if(!skladAuth.hasPassword()){toast('🔑 Сначала задайте пароль для входа по почте');pwUI();return}
+  var on=skladAuth.hasTotp();
+  open('<h2>🔐 '+(on?'Выключить код':'Код из приложения')+'</h2><small style="margin:4px 0 10px">'+(on?'Без кода вы сможете входить только через Google. Введите пароль для входа по почте.':'Шаг 1 из 2. Введите ваш пароль для входа по почте.')+'</small><input id="tp0" type="password" autocomplete="current-password" placeholder="Пароль"><button class="go ac" id="tpok" type="button" style="width:100%">'+(on?'Выключить код':'Дальше')+'</button>');
+  $('tp0').focus();
+  $('tpok').onclick=function(){
+    var btn=this,pass=$('tp0').value;if(!pass){toast('⚠️ Введите пароль');return}
+    btn.disabled=true;
+    if(on){skladAuth.totpOff(pass).then(function(){close();toast('Код выключен');render()},function(e){btn.disabled=false;toast('⚠️ '+e.message)});return}
+    skladAuth.totpStart(pass).then(function(r){
+      return (window.SkladQR?Promise.resolve():window.skladLoadJS('qr.js')).then(function(){return r},function(){return r});
+    }).then(function(r){
+      var qr='';try{if(window.SkladQR)qr='<div style="text-align:center;margin:10px 0"><div style="display:inline-block;background:#fff;padding:10px;border-radius:12px;line-height:0">'+SkladQR.svg(r.uri,{scale:4})+'</div></div>'}catch(e){}
+      open('<h2>🔐 Код из приложения</h2><small style="margin:4px 0 6px">Шаг 2 из 2. Установите бесплатное приложение <b data-notr>Google Authenticator</b> (Play Маркет или App Store), нажмите «＋» → «Сканировать QR-код» и наведите камеру на этот код.</small>'+qr
+        +'<small style="margin:0 0 8px">Не сканируется? В приложении выберите «Ввести ключ настройки» и впишите: <b data-notr style="word-break:break-all">'+esc(r.secret.replace(/(.{4})/g,'$1 ').trim())+'</b></small>'
+        +'<input id="tp1" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 цифр из приложения"><button class="go ac" id="tpgo" type="button" style="width:100%">Включить код</button>');
+      $('tp1').focus();
+      $('tpgo').onclick=function(){
+        var b=this;b.disabled=true;
+        skladAuth.totpConfirm($('tp1').value).then(function(){close();toast('🔐 Код включён: теперь по паролю — только с кодом');render()},function(e){b.disabled=false;toast('⚠️ '+e.message)});
+      };
+    },function(e){btn.disabled=false;toast('⚠️ '+e.message)});
+  };
 }
 function dgt(){try{return JSON.parse(localStorage.getItem('skladgo.draft'))||{}}catch(e){return {}}}
 function gate(edit){
