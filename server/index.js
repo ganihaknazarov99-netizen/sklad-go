@@ -28,6 +28,11 @@ const { createApp } = require('./app');
   http.createServer(app.handle).listen(Number(env.PORT) || 8080, () => console.log('Sklad Go: сервер запущен'));
   // Просроченные сессии больше не нужны
   setInterval(() => db.base('delete from srv.sessions where expires_at < now()').catch(() => {}), 6 * 3600e3).unref();
+  // Копия всей базы при запуске и каждые 6 часов — если что-то изменилось (srv.backup_now в after.sql)
+  const копия = () => db.base('select srv.backup_now() as m')
+    .then((r) => console.log('Копия базы: ' + r[0].m), (e) => console.error('Копия базы не снялась:', e.message));
+  копия();
+  setInterval(копия, 6 * 3600e3).unref();
 })().catch((e) => {
   console.error('Сервер не запустился:', e);
   process.exit(1);

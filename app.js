@@ -582,6 +582,13 @@ function form(it,pre){
   $('nm').focus();
 }
 
+// Копия склада и долгов файлом — к себе на телефон или компьютер. Сервер и сам хранит копии
+// базы (srv.backups), но они лежат там же, где база; своя копия — на случай, если пропадёт всё
+function backupDl(){
+  dl('sklad-backup-'+new Date().toISOString().slice(0,10)+'.json',null,JSON.stringify({v:2,items:S.items,log:S.log,cats:S.cats,biz:S.biz||'',debts:{people:D.people,ops:D.ops},costs:isOwn?CP:undefined}));   // закупка — только в копии хозяина
+  LSS('skladgo.lastbackup',String(Date.now()));
+}
+function backupAgo(){var t=+LSG('skladgo.lastbackup')||0;return t?Math.floor((Date.now()-t)/864e5):-1}
 function restoreUI(){
   open('<h2>📥 Восстановить из копии</h2><small style="margin:4px 0 10px">Выберите файл копии (sklad-backup-….json) или вставьте его текст.</small><input id="rf" type="file" accept=".json,application/json"><textarea id="rt" placeholder="…или вставьте сюда текст копии" style="width:100%;height:100px;padding:10px;border-radius:12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font:inherit;margin-bottom:8px"></textarea><div id="rsum"></div><button class="go ac" id="rc1">Проверить копию</button>');
   var data=null;
@@ -782,7 +789,7 @@ function hist(){
   [].forEach.call(document.querySelectorAll('#pc .chip'),function(c){c.onclick=function(){hp=+c.dataset.d;hist()}});
   $('e1').onclick=function(){dl('sklad-ostatki.csv',[['Название','Категория','Размер','Цвет','Цена','Остаток','Сумма']].concat(S.items.map(function(i){return [i.name,i.cat,i.size,i.color,i.price||0,i.qty,vOf(i)]})))};
   $('e2').onclick=function(){dl('sklad-istoriya.csv',[['Дата','Время','Операция','Товар','Кол-во','Сумма','Заметка','Сотрудник']].concat(S.log.map(function(l){var d=new Date(l.t);return [d.toLocaleDateString('ru-RU'),d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),l.type==='in'?'Привёз':l.type==='out'?'Продал':'Пересчёт',l.name,l.qty,l.sum||0,l.note||'',l.by||'']})))};
-  $('e3').onclick=function(){dl('sklad-backup-'+new Date().toISOString().slice(0,10)+'.json',null,JSON.stringify({v:2,items:S.items,log:S.log,cats:S.cats,biz:S.biz||'',debts:{people:D.people,ops:D.ops},costs:isOwn?CP:undefined}))};   // закупка — только в копии хозяина
+  $('e3').onclick=backupDl;
   $('e4').onclick=restoreUI;
   if($('rp'))$('rp').onclick=function(){
     var t='Отчёт Sklad Go '+td+'\n',r=0;
@@ -1266,6 +1273,7 @@ function team(){
   // названия языков не переводим (data-notr): каждый написан на самом себе
   if(window.setLang)h+='<div class="lbl">🌐 Язык</div><div data-notr>'+chipsHtml('lg',[['ru','Русский'],['tg','Тоҷикӣ']],window.SKLAD_LANG||'ru')+'</div>';
   h+='<div class="lbl">🎨 Вид</div>'+chipsHtml('th',[['light','Светлый'],['dark','Тёмный'],['auto','Как на телефоне']],window.SkladTheme?window.SkladTheme.get():'light')+'<div style="height:12px"></div>';
+  if(isOwn){var ba=backupAgo();h+='<div class="card"'+(ba<0||ba>=7?' style="border-color:var(--out)"':'')+'><div class="info"><b>💾 Копия склада и долгов у вас</b><small>'+(ba<0?'Ещё не скачивали. Сервер хранит копии сам, но своя копия — на случай, если пропадёт всё':ba===0?'Скачана сегодня':'Последняя — '+ba+' дн. назад'+(ba>=7?'. Скачайте свежую':''))+'</small></div><button class="link" id="bkd" type="button">Скачать</button></div>'}
   if(isOwn)h+='<div class="lbl">🏪 Название магазина (подпись в сообщениях)</div><div class="row"><input id="bz" placeholder="Напр. Магазин Ганӣ" value="'+esc(S.biz||'')+'"><button class="go ac" id="bzs" style="padding:10px;font-size:15px;margin-bottom:8px">Сохранить</button></div>';
   var pd=staff.filter(function(x){return x.status==='pending'}),ac=staff.filter(function(x){return x.status!=='pending'});
   if(isOwn&&pd.length)h+='<div class="lbl">Ждут подтверждения ('+pd.length+')</div>'+pd.map(function(x){return '<div class="card"><div class="info"><b>'+esc(x.name)+'</b><small>'+esc(x.phone)+' · '+esc(x.mail)+'</small></div><button class="link" data-ap="'+x._id+'">✓ Разрешить</button><button class="link del" data-bl="'+x._id+'">✕</button></div>'}).join('');
@@ -1294,6 +1302,7 @@ function team(){
   [].forEach.call(document.querySelectorAll('[data-bl]'),function(b){b.onclick=function(){setSt(b.dataset.bl,'blocked')}});
   if(isOwn&&custOn)custBind();
   if($('pwset'))$('pwset').onclick=pwUI;
+  if($('bkd'))$('bkd').onclick=function(){backupDl();toast('💾 Копия скачана — храните файл в надёжном месте');render()};
 }
 /* ===== Покупатели: входят по почте и паролю и видят только свой долг. Хозяин подтверждает
    их и выбирает, чьи это долги (подсказка — по телефону). Статус и выбор держит база
