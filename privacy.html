@@ -28,16 +28,20 @@ small{color:var(--mu)}a{color:var(--ac)}
 
 <section id="ru" lang="ru">
 <h1>Конфиденциальность</h1>
-<small>Действует с 2 ноября 2026 года</small>
+<small>Действует с 5 ноября 2026 года</small>
 
 <p>Sklad Go — учёт склада и долгов для маленького магазина. Программой пользуется
-хозяин магазина и сотрудники, которых он пустил. Здесь написано, какие данные
-программа хранит, кто их видит и как их удалить.</p>
+хозяин магазина, сотрудники, которых он пустил, и покупатели, которые смотрят свой долг.
+Здесь написано, какие данные программа хранит, кто их видит и как их удалить.</p>
 
 <h2>Что хранится</h2>
 <ul>
 <li><b>Вход через Google.</b> Программа получает от Google только ваши имя, адрес
-почты и ссылку на фото профиля. Пароль от Google ей не виден и не нужен.</li>
+почты и ссылку на фото профиля (фото не хранится). Пароль от Google ей не виден и не нужен.</li>
+<li><b>Вход по почте и паролю.</b> Хранится адрес почты и только зашифрованный отпечаток
+пароля — сам пароль не хранится нигде. Если хозяин включил код из приложения, хранится
+ключ этого кода.</li>
+<li><b>Данные покупателя</b>, которые он вписал сам при регистрации: имя, телефон, почта.</li>
 <li><b>Данные сотрудника</b>, которые вы вписали сами при регистрации: имя, телефон, почта.</li>
 <li><b>Данные магазина</b>: товары и остатки, история прихода и продаж, записи о долгах.
 В записях о долгах — имя и телефон человека, которые вписал сотрудник магазина.</li>
@@ -49,16 +53,19 @@ small{color:var(--mu)}a{color:var(--ac)}
 <h2>Кто видит</h2>
 <p>Данные магазина видят только хозяин и сотрудники, которых он подтвердил.
 Новый человек после входа ждёт подтверждения и до этого не видит ничего.
-Это держат правила самой базы данных, а не только программа.</p>
+Покупатель после подтверждения хозяином видит только свои записи о долге — ни склада,
+ни чужих долгов. Это держат правила самой базы данных, а не только программа.</p>
 
 <h2>Где хранится</h2>
 <ul>
-<li><b>Supabase</b> — облачная база данных и вход в программу
-(<a href="https://supabase.com/privacy" rel="noopener">их политика</a>).</li>
+<li><b>Railway</b> — сервер программы и база данных, США
+(<a href="https://railway.com/legal/privacy" rel="noopener">их политика</a>).
+Сервер хранит копии базы на случай сбоя: за последние 30 дней и по одной в неделю
+ещё полгода.</li>
 <li><b>Google</b> — подтверждает, что вы — это вы, при входе
 (<a href="https://policies.google.com/privacy" rel="noopener">их политика</a>).</li>
-<li><b>Vercel</b> отдаёт страницы сайта, <b>jsDelivr</b> — библиотеку для связи с базой.
-Они видят только сам запрос страницы, как любой сайт.</li>
+<li><b>Vercel</b> отдаёт страницы сайта и передаёт запросы серверу, <b>jsDelivr</b> — одну
+из библиотек программы. Они видят только сам запрос, как любой сайт.</li>
 </ul>
 <p>На вашем телефоне программа хранит копию данных, чтобы работать без интернета.
 При выходе из программы эта копия стирается.</p>
@@ -66,7 +73,8 @@ small{color:var(--mu)}a{color:var(--ac)}
 <h2>Как удалить</h2>
 <ul>
 <li><b>Свой аккаунт</b> сотрудник удаляет сам: вкладка «Команда» → «Удалить мой аккаунт».
-Вместе с ним удаляется вход и данные сотрудника.</li>
+Вместе с ним удаляется вход и данные сотрудника. Покупатель может попросить хозяина
+магазина или написать разработчикам — аккаунт удалят вместе с входом.</li>
 <li><b>Записи магазина</b> — товары, долги, история — принадлежат магазину. Если в них
 есть ваше имя или телефон и вы хотите их убрать, скажите хозяину магазина.</li>
 <li>Хозяин может удалить все данные магазина целиком.</li>
@@ -80,16 +88,20 @@ small{color:var(--mu)}a{color:var(--ac)}
 
 <section id="en" lang="en">
 <h1>Privacy</h1>
-<small>Effective 2 November 2026</small>
+<small>Effective 5 November 2026</small>
 
-<p>Sklad Go is a stock and debt book for a small shop. It is used by the shop owner
-and by the staff the owner lets in. This page explains what the app stores, who can
-see it and how to delete it.</p>
+<p>Sklad Go is a stock and debt book for a small shop. It is used by the shop owner,
+by the staff the owner lets in, and by customers who check their own debt. This page
+explains what the app stores, who can see it and how to delete it.</p>
 
 <h2>What is stored</h2>
 <ul>
 <li><b>Google sign-in.</b> The app receives only your name, email address and profile
-photo link from Google. It never sees your Google password.</li>
+photo link from Google (the photo is not stored). It never sees your Google password.</li>
+<li><b>Email and password sign-in.</b> The app stores your email address and only an
+encrypted fingerprint of your password — the password itself is not stored anywhere.
+If the owner turns on app codes, the key for those codes is stored.</li>
+<li><b>Customer details</b> customers enter themselves when they register: name, phone, email.</li>
 <li><b>Staff details</b> you enter yourself when you register: name, phone, email.</li>
 <li><b>Shop data</b>: goods and stock levels, history of deliveries and sales, debt
 records. A debt record holds the name and phone number of the person, entered by shop staff.</li>
@@ -101,16 +113,19 @@ share data with anyone for their own purposes.</p>
 <h2>Who can see it</h2>
 <p>Shop data is visible only to the owner and to staff the owner has approved.
 A new person waits for approval after signing in and sees nothing until then.
-This is enforced by the database rules, not only by the app.</p>
+A customer, once approved by the owner, sees only their own debt records — not the stock
+and not other people's debts. This is enforced by the database rules, not only by the app.</p>
 
 <h2>Where it is kept</h2>
 <ul>
-<li><b>Supabase</b> — cloud database and sign-in
-(<a href="https://supabase.com/privacy" rel="noopener">their policy</a>).</li>
+<li><b>Railway</b> — the app's server and database, United States
+(<a href="https://railway.com/legal/privacy" rel="noopener">their policy</a>).
+The server keeps backup copies of the database: from the last 30 days, plus one a week
+for six months.</li>
 <li><b>Google</b> — confirms your identity when you sign in
 (<a href="https://policies.google.com/privacy" rel="noopener">their policy</a>).</li>
-<li><b>Vercel</b> serves the website pages, <b>jsDelivr</b> serves the database library.
-They see only the page request itself, like any website.</li>
+<li><b>Vercel</b> serves the website pages and forwards requests to the server,
+<b>jsDelivr</b> serves one of the app's libraries. They see only the request itself, like any website.</li>
 </ul>
 <p>The app keeps a copy of the data on your phone so it can work offline.
 Signing out erases that copy.</p>
@@ -118,7 +133,8 @@ Signing out erases that copy.</p>
 <h2>How to delete</h2>
 <ul>
 <li><b>Your account</b>: staff delete it themselves on the “Команда” (Team) tab →
-“Удалить мой аккаунт” (Delete my account). This removes your sign-in and staff details.</li>
+“Удалить мой аккаунт” (Delete my account). This removes your sign-in and staff details.
+Customers can ask the shop owner or contact the developers, and their account and sign-in will be deleted.</li>
 <li><b>Shop records</b> — goods, debts, history — belong to the shop. If they contain
 your name or phone number and you want them removed, ask the shop owner.</li>
 <li>The owner can delete all shop data at once.</li>
