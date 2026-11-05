@@ -22,5 +22,14 @@
     // Адрес для проверки правок сервера, прежде чем они попадут в магазин
     'sklad-go-git-claude-happy-agnesi-467428-gani26.vercel.app': { api: '/api' }
   };
-  window.SKLAD_CONFIG = МАГАЗИН[location.hostname] || { url: '', anonKey: '' };
+  // Тестовый режим (адрес с ?mock, выключить — ?mock=off): вход по почте и паролю как
+  // владелец или покупатель, всё только в этом браузере (mock.js). На адресах
+  // магазина не включается никогда — там всегда настоящий сервер
+  var mock = false;
+  try {
+    if (/[?&]mock=off\b/.test(location.search)) localStorage.removeItem('skladgo.mockmode');
+    else if (/[?&]mock\b/.test(location.search)) localStorage.setItem('skladgo.mockmode', '1');
+    mock = localStorage.getItem('skladgo.mockmode') === '1';
+  } catch (e) {}
+  window.SKLAD_CONFIG = МАГАЗИН[location.hostname] || (mock ? { mock: true } : { url: '', anonKey: '' });
 })();

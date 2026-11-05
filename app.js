@@ -1270,6 +1270,7 @@ function team(){
   h+='<div class="lbl">Сотрудники склада ('+ac.length+')</div>';
   if(!ac.length)h+='<div class="empty">Сотрудники появятся здесь после регистрации по вашей ссылке</div>';
   ac.sort(function(a,b){return String(a.name).localeCompare(String(b.name),'ru')}).forEach(function(x){h+='<div class="card"><div class="info"><b>'+(x.owner?'👑 ':'')+esc(x.name)+(x.status==='blocked'?' · ⛔ заблокирован':'')+'</b>'+(isOwn?'<small>'+esc(x.phone)+' · '+esc(x.mail)+'</small>':'')+'</div>'+(isOwn&&!x.owner?(x.status==='blocked'?'<button class="link" data-ap="'+x._id+'">Вернуть доступ</button>':'<button class="link del" data-bl="'+x._id+'">Заблокировать</button>'):'')+'</div>'});
+  if(isOwn&&window.skladTeamExtra)h+=skladTeamExtra();   // тестовый режим (mock.js): покупатели
   h+='<div class="lbl" style="margin-top:14px">Лента изменений</div>';
   if(!actList.length)h+='<div class="empty">Изменений пока нет</div>';
   h+=actList.slice(0,40).map(function(a){var d=new Date(a.t);return '<div class="log"><div><b>'+esc(a.by||'—')+'</b><small>'+esc(a.txt)+'</small></div><span style="color:var(--mu);font-size:12px;text-align:right">'+d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+'<br>'+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span></div>'}).join('');
@@ -1289,6 +1290,7 @@ function team(){
   if($('bzs'))$('bzs').onclick=function(){S.biz=$('bz').value.trim();save();logAct('изменил название магазина');toast('🏪 Сохранено')};
   [].forEach.call(document.querySelectorAll('[data-ap]'),function(b){b.onclick=function(){setSt(b.dataset.ap,'active')}});
   [].forEach.call(document.querySelectorAll('[data-bl]'),function(b){b.onclick=function(){setSt(b.dataset.bl,'blocked')}});
+  if(isOwn&&window.skladTeamBind)skladTeamBind();
 }
 function dgt(){try{return JSON.parse(localStorage.getItem('skladgo.draft'))||{}}catch(e){return {}}}
 function gate(edit){

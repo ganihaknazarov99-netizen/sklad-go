@@ -70,7 +70,10 @@
   })();
 
   /* ---------- Владелец, команда и лента — без сервера ---------- */
-  window.skladLoadJS('app.js').then(function () {
+  // В тестовом режиме (mock.js) склад запускается только после входа владельца:
+  // покупателю нужны лишь показательные долги, а не сам склад
+  var mock = !!window.SKLAD_MOCK;
+  function start() { return window.skladLoadJS('app.js').then(function () {
     // Свой склад (после «Начать свой склад»): в команде только сам хозяин, лента пустая.
     // Раньше показательные Алишер и Нигина оставались и в чужом, уже своём складе
     var own = false;
@@ -78,7 +81,7 @@
     isOwn = true;
     myId = 'demo-owner';
     var me = ME || {};
-    staff = own ? [
+    staff = (own || mock) ? [
       { _id: 'demo-owner', uid: 'demo-owner', name: me.name || 'Хозяин', phone: me.phone || '', mail: me.mail || '', owner: true, status: 'active', t: Date.now() }
     ] : [
       { _id: 'demo-owner', uid: 'demo-owner', name: 'Ганӣ', phone: '+992 90 000 00 01', mail: 'demo@sklad.go', owner: true, status: 'active', t: Date.now() },
@@ -130,6 +133,8 @@
     };
 
     render();
-    setTimeout(function () { toast(own ? 'Ваш склад хранится в этом браузере — на другом телефоне его не будет' : 'Это демо: меняйте остатки и долги — всё сохранится в браузере'); }, 400);
-  });
+    if (!mock) setTimeout(function () { toast(own ? 'Ваш склад хранится в этом браузере — на другом телефоне его не будет' : 'Это демо: меняйте остатки и долги — всё сохранится в браузере'); }, 400);
+  }); }
+  if (mock) window.skladDemoStart = start;
+  else start();
 })();
