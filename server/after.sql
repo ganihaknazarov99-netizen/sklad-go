@@ -245,3 +245,105 @@ grant execute on function public.my_debt() to authenticated;
 
 drop trigger if exists sklad_notify on public.customers;
 create trigger sklad_notify after insert or update or delete on public.customers for each row execute function srv.notify();
+
+-- ---------- Копии базы ----------
+-- Сервер сам снимает копию всей базы при запуске и каждые 6 часов — если что-то
+-- изменилось. Копии лежат в srv.backups: с сайта до них не добраться никому (схема srv
+-- закрыта для anon и authenticated), стереть их через программу нельзя.
+-- Храним всё за 30 дней и по одной копии в неделю ещё на полгода.
+-- Список копий в Railway → Postgres → Data: select * from public.копии_базы;
+-- Вернуть копию:                              select srv.restore_backup(<номер>);
+create table if not exists srv.backups (
+  id   bigserial   primary key,
+  t    timestamptz not null default now(),
+  sha  text        not null,
+  data jsonb       not null
+);
+
+create or replace function srv.snapshot() returns jsonb language sql stable as $$
+  select jsonb_build_object(
+    'docs',      (select coalesce(jsonb_agg(to_jsonb(d)), '[]'::jsonb) from public.docs d),
+    'staff',     (select coalesce(jsonb_agg(to_jsonb(s)), '[]'::jsonb) from public.staff s),
+    'customers', (select coalesce(jsonb_agg(to_jsonb(c)), '[]'::jsonb) from public.customers c),
+    'activity',  (select coalesce(jsonb_agg(to_jsonb(a) order by a.id), '[]'::jsonb) from public.activity a),
+    'settings',  (select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) from public.settings x),
+    'users',     (select coalesce(jsonb_agg(jsonb_build_object('id', u.id, 'email', u.email, 'email_confirmed_at', u.email_confirmed_at,
+                    'google_sub', u.google_sub, 'name', u.name, 'created_at', u.created_at, 'pass_hash', u.pass_hash)), '[]'::jsonb) from auth.users u))
+$$;
+
+create or replace function srv.backup_now() returns text language plpgsql as $$
+declare j jsonb := srv.snapshot(); h text := md5(j::text); last text;
+begin
+  select sha into last from srv.backups order by id desc limit 1;
+  if last = h then return 'без изменений'; end if;
+  insert into srv.backups (sha, data) values (h, j);
+  delete from srv.backups b
+   where b.t < now() - interval '30 days'
+     and (b.t < now() - interval '182 days'
+          or b.id <> (select max(x.id) from srv.backups x where date_trunc('week', x.t) = date_trunc('week', b.t)));
+  return 'копия сохранена';
+end $$;
+
+-- Вернуть всё как было в копии. Сначала снимаем копию нынешнего состояния — так
+-- возврат тоже можно отменить. Ленту не стираем (в ней видно, что случилось), только
+-- дописываем недостающее. Версии документов растут: телефоны увидят и перечитают склад
+create or replace function srv.restore_backup(p_id bigint) returns text language plpgsql as $$
+declare b srv.backups; d jsonb; n_docs int;
+begin
+  select * into b from srv.backups where id = p_id;
+  if not found then raise exception 'Нет копии с номером %', p_id; end if;
+  perform srv.backup_now();
+  set local session_replication_role = replica;   -- охранники пускают только «себя»; здесь переносим всё разом
+
+  insert into auth.users (id, email, email_confirmed_at, google_sub, name, created_at, pass_hash)
+    select (x->>'id')::uuid, x->>'email', (x->>'email_confirmed_at')::timestamptz, x->>'google_sub',
+           coalesce(x->>'name', ''), coalesce((x->>'created_at')::timestamptz, now()), x->>'pass_hash'
+      from jsonb_array_elements(b.data->'users') x
+    on conflict do nothing;
+
+  for d in select * from jsonb_array_elements(b.data->'docs') loop
+    insert into public.docs (id, data, version, updated_at)
+      values (d->>'id', d->'data', (d->>'version')::bigint + 1, now())
+      on conflict (id) do update set data = excluded.data, version = greatest(public.docs.version, excluded.version) + 1, updated_at = now();
+  end loop;
+  get diagnostics n_docs = row_count;
+
+  delete from public.staff;
+  insert into public.staff (uid, name, phone, mail, owner, status, t)
+    select (x->>'uid')::uuid, x->>'name', x->>'phone', x->>'mail', (x->>'owner')::boolean, x->>'status', (x->>'t')::bigint
+      from jsonb_array_elements(b.data->'staff') x
+     where exists (select 1 from auth.users u where u.id = (x->>'uid')::uuid);
+  delete from public.customers;
+  insert into public.customers (uid, name, phone, status, pid, t)
+    select (x->>'uid')::uuid, x->>'name', x->>'phone', x->>'status', x->>'pid', (x->>'t')::bigint
+      from jsonb_array_elements(coalesce(b.data->'customers', '[]'::jsonb)) x
+     where exists (select 1 from auth.users u where u.id = (x->>'uid')::uuid);
+  insert into public.settings (key, value)
+    select x->>'key', x->>'value' from jsonb_array_elements(b.data->'settings') x
+    on conflict (key) do update set value = excluded.value;
+  insert into public.activity (id, t, "by", uid, txt)
+    select (x->>'id')::bigint, (x->>'t')::bigint, x->>'by', x->>'uid', x->>'txt'
+      from jsonb_array_elements(b.data->'activity') x
+    on conflict (id) do nothing;
+  perform setval(pg_get_serial_sequence('public.activity', 'id'), coalesce((select max(id) from public.activity), 0) + 1, false);
+  insert into public.activity (t, "by", uid, txt)
+    values ((extract(epoch from clock_timestamp()) * 1000)::bigint, 'Сервер', '', 'данные возвращены из копии от ' || to_char(b.t at time zone 'Asia/Dushanbe', 'DD.MM.YYYY HH24:MI'));
+
+  set local session_replication_role = origin;
+  perform srv.rebuild_docs(); perform srv.rebuild_staff(); perform srv.rebuild_activity();
+  perform pg_notify('sklad', json_build_object('t', 'docs', 'id', 'main')::text);
+  perform pg_notify('sklad', json_build_object('t', 'docs', 'id', 'debts')::text);
+  perform pg_notify('sklad', json_build_object('t', 'staff')::text);
+  return format('Возвращено из копии №%s от %s: документов %s', b.id, to_char(b.t at time zone 'Asia/Dushanbe', 'DD.MM.YYYY HH24:MI'), n_docs);
+end $$;
+revoke all on function srv.snapshot(), srv.backup_now(), srv.restore_backup(bigint) from public, anon, authenticated;
+
+-- Понятный список копий для Railway → Data. Программе он не нужен, людям с сайта недоступен
+create or replace view public.копии_базы as
+  select id as номер, to_char(t at time zone 'Asia/Dushanbe', 'DD.MM.YYYY HH24:MI') as когда,
+         (select count(*) from jsonb_array_elements(coalesce((select x->'data'->'items' from jsonb_array_elements(data->'docs') x where x->>'id' = 'main'), '[]'::jsonb))) as товаров,
+         (select count(*) from jsonb_array_elements(coalesce((select x->'data'->'ops' from jsonb_array_elements(data->'docs') x where x->>'id' = 'debts'), '[]'::jsonb))) as записей_долгов,
+         jsonb_array_length(data->'staff') as в_команде,
+         pg_size_pretty(pg_column_size(data)::bigint) as размер
+    from srv.backups order by id desc;
+revoke all on public.копии_базы from public, anon, authenticated;
