@@ -32,13 +32,14 @@ function мок() {
   const ctx = { localStorage, crypto: globalThis.crypto, TextEncoder, Promise, JSON, Object, Date, Math, Uint8Array };
   ctx.window = ctx;
   vm.createContext(ctx);
+  vm.runInContext(read('customer.js'), ctx);   // остаток и сроки считает экран покупателя
   vm.runInContext(read('mock.js'), ctx);
   return { M: ctx.SkladMock, store };
 }
 
 test('регистрация владельца: пароль не хранится, вход сразу', async () => {
   const { M, store } = мок();
-  const a = await M.signUp({ role: 'owner', name: 'Гани', phone: '90 009 73 37', email: 'Owner@Test.tj', password: 'secret1' });
+  const a = await M.signUp({ role: 'owner', name: 'Гани', phone: '90 009 73 37', email: 'Owner@Test.tj', password: 'secret12' });
   assert.equal(a.status, 'active');
   assert.equal(a.email, 'owner@test.tj', 'почта без разницы в регистре');
   assert.equal(a.phone, '+992900097337');
@@ -50,23 +51,23 @@ test('регистрация владельца: пароль не хранит�
 
 test('владелец у магазина один; почта не повторяется; короткий пароль и покупатель без телефона — нет', async () => {
   const { M } = мок();
-  await M.signUp({ role: 'owner', name: 'Гани', email: 'owner@test.tj', password: 'secret1' });
-  await assert.rejects(M.signUp({ role: 'owner', name: 'Вор', email: 'vor@test.tj', password: 'secret1' }), /уже есть владелец/);
-  await assert.rejects(M.signUp({ role: 'customer', name: 'Фируз', phone: '901112233', email: 'OWNER@test.tj', password: 'secret1' }), /уже есть — войдите/);
-  await assert.rejects(M.signUp({ role: 'customer', name: 'Фируз', phone: '901112233', email: 'f@test.tj', password: '123' }), /не короче 6/);
-  await assert.rejects(M.signUp({ role: 'customer', name: 'Фируз', phone: '', email: 'f@test.tj', password: '123456' }), /Впишите телефон/);
-  await assert.rejects(M.signUp({ role: 'admin', name: 'Х', email: 'x@test.tj', password: '123456' }), /владелец магазина или покупатель/);
-  await assert.rejects(M.signUp({ role: 'customer', name: 'Фируз', phone: '901112233', email: 'не почта', password: '123456' }), /Проверьте почту/);
+  await M.signUp({ role: 'owner', name: 'Гани', email: 'owner@test.tj', password: 'secret12' });
+  await assert.rejects(M.signUp({ role: 'owner', name: 'Вор', email: 'vor@test.tj', password: 'secret12' }), /уже есть владелец/);
+  await assert.rejects(M.signUp({ role: 'customer', name: 'Фируз', phone: '901112233', email: 'OWNER@test.tj', password: 'secret12' }), /уже есть — войдите/);
+  await assert.rejects(M.signUp({ role: 'customer', name: 'Фируз', phone: '901112233', email: 'f@test.tj', password: '123' }), /не короче 8/);
+  await assert.rejects(M.signUp({ role: 'customer', name: 'Фируз', phone: '', email: 'f@test.tj', password: '12345678' }), /Впишите телефон/);
+  await assert.rejects(M.signUp({ role: 'admin', name: 'Х', email: 'x@test.tj', password: '12345678' }), /владелец магазина или покупатель/);
+  await assert.rejects(M.signUp({ role: 'customer', name: 'Фируз', phone: '901112233', email: 'не почта', password: '12345678' }), /Проверьте почту/);
 });
 
 test('вход: верный пароль пускает; неверный и чужая почта — одна и та же ошибка', async () => {
   const { M } = мок();
-  const a = await M.signUp({ role: 'owner', name: 'Гани', email: 'owner@test.tj', password: 'secret1' });
+  const a = await M.signUp({ role: 'owner', name: 'Гани', email: 'owner@test.tj', password: 'secret12' });
   M.logout();
   assert.equal(M.current(), null);
-  await assert.rejects(M.login('owner@test.tj', 'secret2'), /^Error: Неверная почта или пароль$/);
-  await assert.rejects(M.login('nobody@test.tj', 'secret1'), /^Error: Неверная почта или пароль$/, 'не выдаём, есть ли такой аккаунт');
-  assert.equal((await M.login(' OWNER@test.tj ', 'secret1')).id, a.id);
+  await assert.rejects(M.login('owner@test.tj', 'secret22'), /^Error: Неверная почта или пароль$/);
+  await assert.rejects(M.login('nobody@test.tj', 'secret12'), /^Error: Неверная почта или пароль$/, 'не выдаём, есть ли такой аккаунт');
+  assert.equal((await M.login(' OWNER@test.tj ', 'secret12')).id, a.id);
   assert.equal(M.current().id, a.id);
 });
 
@@ -81,7 +82,7 @@ test('покупатель: до подтверждения не видит ни
       { pid: 'p2', type: 'give', amt: 220, t: now - 3 * day, due: iso(7), note: 'Джинсы' },
     ],
   };
-  const c = await M.signUp({ role: 'customer', name: 'Фируз', phone: '90 111 22 33', email: 'f@test.tj', password: '123456' });
+  const c = await M.signUp({ role: 'customer', name: 'Фируз', phone: '90 111 22 33', email: 'f@test.tj', password: '12345678' });
   assert.equal(c.status, 'pending', 'сам к долгам не привязывается');
   assert.equal(M.customerDebt(c, D), null);
   M.update(c.id, { status: 'active', pid: 'p1' });
@@ -91,7 +92,7 @@ test('покупатель: до подтверждения не видит ни
   assert.equal(r.late, iso(-4), 'срок прошёл — видно с какого числа');
   M.update(c.id, { status: 'blocked', pid: null });
   assert.equal(M.customerDebt(M.current(), D), null, 'отклонённый — снова ничего');
-  const m = await M.signUp({ role: 'customer', name: 'Мадина', phone: '937778899', email: 'm@test.tj', password: '123456' });
+  const m = await M.signUp({ role: 'customer', name: 'Мадина', phone: '937778899', email: 'm@test.tj', password: '12345678' });
   M.update(m.id, { status: 'active', pid: 'p2' });
   const r2 = M.customerDebt(M.current(), D);
   assert.equal(r2.balance, 220);

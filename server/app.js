@@ -1,7 +1,8 @@
 'use strict';
 /* Сервер Sklad Go на Railway: то, что раньше делал Supabase.
-   · Вход через Google. Сессия — случайный ключ в закрытой cookie (HttpOnly), в базе лежит
-     только его отпечаток.
+   · Вход через Google или по почте и паролю. Сессия — случайный ключ в закрытой cookie
+     (HttpOnly), в базе лежит только его отпечаток. От пароля — только отпечаток (scrypt).
+   · Покупатели входят по почте и паролю и видят только свой долг (public.my_debt).
    · Данные. Каждый запрос идёт в базу от имени вошедшего (db.asUser), поэтому кто что
      видит и может — решают те же правила supabase/schema.sql. Сервер их не дублирует:
      он только не пускает без входа и пропускает в таблицы лишь известные поля.
@@ -21,8 +22,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ТАБЛИЦЫ = {
   staff: { ключ: 'uid', порядок: ['t', 'name'], новое: ['name', 'phone', 'mail', 't'], правка: ['name', 'phone', 'mail', 'status', 't'] },
   activity: { ключ: 'id', порядок: ['t', 'id'], новое: ['txt'], правка: [] },
+  // статус и чьи долги (pid) меняет только хозяин — это держит customers_guard
+  customers: { ключ: 'uid', порядок: ['t', 'name'], новое: ['name', 'phone'], правка: ['name', 'phone', 'status', 'pid'] },
 };
-const ВЫЗОВЫ = ['doc_set', 'is_owner', 'is_active', 'delete_my_account'];
+const ВЫЗОВЫ = ['doc_set', 'is_owner', 'is_active', 'delete_my_account', 'my_debt'];
+const ПАРОЛЬ_ОТ = 8, ПАРОЛЬ_ДО = 200;
+const ПОПЫТОК = 10, ОКНО = 15 * 60000;   // неудачных входов с одного адреса на одну почту за 15 минут
 // Отказы правил базы — их текст программа знает (backend.js)
 const ОТКАЗЫ = /\b(version_conflict|debt_changed|debt_vanished|log_vanished|owner_cannot_delete|blocked_cannot_delete|doc_id_locked|bad_doc|not authenticated)\b/;
 
@@ -34,6 +39,9 @@ function createApp(o) {
   const сейчас = o.now || Date.now;
   const log = o.log || ((...a) => console.error(...a));
   const слушатели = new Set();
+  const неудачи = new Map();   // ip|почта → [время неудачной попытки]
+  // На http://127.0.0.1 (проверка на своём компьютере) cookie с Secure браузер не сохранит
+  const secure = o.secureCookies === false ? '' : '; Secure';
 
   /* ---------- Ответы ---------- */
   function json(res, code, obj, head) {
@@ -51,7 +59,7 @@ function createApp(o) {
     res.end();
   }
   function cookie(res, name, value, maxAge, path) {
-    const c = name + '=' + value + '; Path=' + path + '; Max-Age=' + maxAge + '; HttpOnly; Secure; SameSite=Lax';
+    const c = name + '=' + value + '; Path=' + path + '; Max-Age=' + maxAge + '; HttpOnly' + secure + '; SameSite=Lax';
     const was = res.getHeader('set-cookie');
     res.setHeader('set-cookie', (was ? [].concat(was) : []).concat(c));
   }
@@ -211,10 +219,106 @@ function createApp(o) {
       return redirect(res, '/?error=server_error&error_description=' + encodeURIComponent('Unable to exchange external code'));
     }
     const uid = await человек(p);
+    await сессия(res, uid);
+    redirect(res, to);
+  }
+  async function сессия(res, uid) {
     const token = rnd(32);
     await db.base(`insert into srv.sessions (token_hash, user_id, expires_at) values ($1, $2, now() + interval '${СЕССИЯ_ДНЕЙ} days')`, [hash(token), uid]);
     cookie(res, 'sg_s', token, СЕССИЯ_ДНЕЙ * 86400, '/');
-    redirect(res, to);
+  }
+
+  /* ---------- Вход по почте и паролю ---------- */
+  // scrypt: подбирать пароль по украденному отпечатку долго и дорого
+  function отпечаток(pass, salt) {
+    return new Promise((done, bad) => crypto.scrypt(String(pass), salt, 64, { N: 16384, r: 8, p: 1 }, (e, k) => (e ? bad(e) : done(k))));
+  }
+  async function запароль(pass) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    return 'scrypt$' + salt + '$' + (await отпечаток(pass, salt)).toString('hex');
+  }
+  async function верен(pass, stored) {
+    const [kind, salt, h] = String(stored || 'scrypt$-$').split('$');
+    const k = await отпечаток(pass, salt || '-');
+    if (kind !== 'scrypt' || !h) return false;
+    const want = Buffer.from(h, 'hex');
+    return want.length === k.length && crypto.timingSafeEqual(want, k);
+  }
+  const ip = (req) => String(req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
+  function много(key) {
+    const t = сейчас(), L = (неудачи.get(key) || []).filter((x) => t - x < ОКНО);
+    неудачи.set(key, L);
+    return L.length >= ПОПЫТОК;
+  }
+  function неудача(key) {
+    неудачи.set(key, (неудачи.get(key) || []).concat(сейчас()));
+    if (неудачи.size > 10000) неудачи.clear();   // память сервера не забиваем
+  }
+  const почта = (e) => String(e || '').trim().toLowerCase();
+  const цифры = (p) => String(p || '').replace(/\D/g, '');
+
+  async function регистрация(req, res) {
+    const a = await body(req);
+    const mail = почта(a.email), name = String(a.name || '').trim().slice(0, 60), pass = String(a.password || '');
+    const role = a.role === 'customer' ? 'customer' : 'staff';
+    let phone = цифры(a.phone);
+    if (phone.length === 9) phone = '992' + phone;
+    if (!name) return нет(res, 400, 'bad_request', 'Впишите имя');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail) || mail.length > 200) return нет(res, 400, 'bad_request', 'Проверьте почту');
+    if (pass.length < ПАРОЛЬ_ОТ || pass.length > ПАРОЛЬ_ДО) return нет(res, 400, 'bad_request', 'Пароль — не короче ' + ПАРОЛЬ_ОТ + ' знаков');
+    if (role === 'customer' && phone.length < 11) return нет(res, 400, 'bad_request', 'Впишите телефон — по нему магазин найдёт ваши долги');
+    const key = 'up|' + ip(req);
+    if (много(key)) return нет(res, 429, 'rate_limited', 'Слишком много попыток. Подождите 15 минут');
+    неудача(key);   // считаем и удачные: заводить аккаунты пачками с одного адреса незачем
+    // почта, хоть раз виденная сервером, — уже чья-то: войти можно, завести второй аккаунт — нет
+    const was = await db.base('select 1 from auth.users where lower(email) = $1', [mail]);
+    if (was[0]) return нет(res, 409, 'exists', 'Аккаунт с этой почтой уже есть — войдите');
+    let r;
+    try {
+      // почта не подтверждена: по ней не стать хозяином и не занять место человека, вошедшего через Google
+      r = await db.base('insert into auth.users (email, name, pass_hash, last_sign_in_at) values ($1, $2, $3, now()) returning id', [mail, name, await запароль(pass)]);
+    } catch (e) {
+      if (e && e.code === '23505') return нет(res, 409, 'exists', 'Аккаунт с этой почтой уже есть — войдите');
+      throw e;
+    }
+    const uid = r[0].id;
+    if (role === 'customer') {
+      await db.asUser(uid, (q) => q('insert into public.customers (name, phone) values ($1, $2)', [name, '+' + phone]));
+    }
+    await сессия(res, uid);
+    return ok(res, { id: uid });
+  }
+
+  async function входПаролем(req, res) {
+    const a = await body(req);
+    const mail = почта(a.email), key = 'in|' + ip(req) + '|' + mail;
+    if (много(key)) return нет(res, 429, 'rate_limited', 'Слишком много попыток. Подождите 15 минут');
+    const r = await db.base('select id, pass_hash from auth.users where lower(email) = $1', [mail]);
+    // нет такой почты — отпечаток всё равно считаем: по времени ответа не понять, есть ли аккаунт
+    const good = await верен(a.password || '', r[0] && r[0].pass_hash);
+    if (!r[0] || !r[0].pass_hash || !good) {
+      неудача(key);
+      return нет(res, 401, 'bad_login', 'Неверная почта или пароль');
+    }
+    неудачи.delete(key);
+    await db.base('update auth.users set last_sign_in_at = now() where id = $1', [r[0].id]);
+    await сессия(res, r[0].id);
+    return ok(res, { id: r[0].id });
+  }
+
+  // Задать или сменить пароль, будучи внутри. Был пароль — нужен прежний
+  async function смена(req, res, me) {
+    const a = await body(req), pass = String(a.password || '');
+    if (pass.length < ПАРОЛЬ_ОТ || pass.length > ПАРОЛЬ_ДО) return нет(res, 400, 'bad_request', 'Пароль — не короче ' + ПАРОЛЬ_ОТ + ' знаков');
+    const r = await db.base('select email, pass_hash from auth.users where id = $1', [me.id]);
+    if (!r[0] || !r[0].email) return нет(res, 400, 'bad_request', 'У аккаунта нет почты — войти по паролю будет нельзя');
+    if (r[0].pass_hash) {
+      const key = 'pw|' + me.id;
+      if (много(key)) return нет(res, 429, 'rate_limited', 'Слишком много попыток. Подождите 15 минут');
+      if (!(await верен(a.current || '', r[0].pass_hash))) { неудача(key); return нет(res, 403, 'bad_login', 'Прежний пароль не подходит'); }
+    }
+    await db.base('update auth.users set pass_hash = $2 where id = $1', [me.id, await запароль(pass)]);
+    return ok(res, null);
   }
 
   async function выйти(res, me) {
@@ -279,6 +383,7 @@ function createApp(o) {
       }
       const r = await как((q) => q('select public.' + ключ + '() as v'));
       if (ключ === 'delete_my_account') { await выйти(res, null); закрыть(me.id); return ok(res, null); }
+      if (ключ === 'my_debt') return ok(res, r[0].v || null);
       return ok(res, !!r[0].v);
     }
 
@@ -293,7 +398,7 @@ function createApp(o) {
     }
 
     const т = ТАБЛИЦЫ[вид];
-    if (ключ && вид === 'staff' && !UUID.test(ключ)) return нет(res, 400, 'bad_request', 'Неверный uid');
+    if (ключ && (вид === 'staff' || вид === 'customers') && !UUID.test(ключ)) return нет(res, 400, 'bad_request', 'Неверный uid');
     if (m === 'GET') {
       if (ключ) {
         const r = await как((q) => q(`select * from public.${вид} where "${т.ключ}" = $1`, [ключ]));
@@ -328,16 +433,28 @@ function createApp(o) {
       if (p === '/health') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
       if (p === '/auth/google' && req.method === 'GET') return google(req, res, u);
       if (p === '/auth/callback' && req.method === 'GET') return await callback(req, res, u);
+      if (p === '/auth/password/signup' || p === '/auth/password/login') {
+        if (req.method !== 'POST') return нет(res, 405, 'not_allowed', 'Так нельзя');
+        if (!свой(req)) return нет(res, 403, 'forbidden', 'Чужой запрос');
+        return await (p === '/auth/password/signup' ? регистрация(req, res) : входПаролем(req, res));
+      }
       if (!p.startsWith('/api/')) return нет(res, 404, 'not_found', 'Нет такого адреса');
       if (req.method !== 'GET' && !свой(req)) return нет(res, 403, 'forbidden', 'Чужой запрос');
 
       const me = await who(req, res);
-      if (p === '/api/me') return me ? ok(res, { id: me.id, email: me.email, name: me.name }) : нет(res, 401, 'not authenticated', 'Нужно войти');
+      if (p === '/api/me') {
+        if (!me) return нет(res, 401, 'not authenticated', 'Нужно войти');
+        // покупатель или нет — от этого зависит, какой экран показать после входа
+        const k = await db.base(`select exists (select 1 from public.customers where uid = $1) as c,
+            (select pass_hash is not null from auth.users where id = $1) as pw`, [me.id]);
+        return ok(res, { id: me.id, email: me.email, name: me.name, kind: k[0].c ? 'customer' : 'staff', has_password: !!k[0].pw });
+      }
       if (p === '/api/logout' && req.method === 'POST') { await выйти(res, me); return ok(res, null); }
       if (!me) return нет(res, 401, 'not authenticated', 'Нужно войти');
       if (p === '/api/events' && req.method === 'GET') return events(req, res, me);
+      if (p === '/api/password' && req.method === 'POST') return await смена(req, res, me);
 
-      const m = /^\/api\/(rpc|docs|staff|activity)(?:\/([^/]+))?$/.exec(p);
+      const m = /^\/api\/(rpc|docs|staff|activity|customers)(?:\/([^/]+))?$/.exec(p);
       if (!m) return нет(res, 404, 'not_found', 'Нет такого адреса');
       return await данные(req, res, u, me, m[1], m[2] && decodeURIComponent(m[2]));
     } catch (e) {

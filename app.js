@@ -111,6 +111,7 @@ function remote(d,v){
   skladBackend.db().then(function(db){
     if(!db)return;dbd=db.doc('warehouse/main');sdb=db;who().then(function(){reg();restore();cpLoad()});ddb=db.doc('warehouse/debts');ddb.onSnapshot(dsnap,function(){});
     db.collection('staff').onSnapshot(staffSnap,function(){});
+    db.collection('customers').onSnapshot(custSnap,function(){});   // покупатели (свой сервер); у Supabase их нет — молча пусто
     db.collection('activity').orderBy('t','desc').limit(100).onSnapshot(actSnap,function(){});
     dbd.onSnapshot(function(s){
       if(!s.exists){if(S.items.length){dirtyMain=true;LSS('skladgo.dirty.main','1');push()}else if(!$('ov').innerHTML)render();return}
@@ -1256,6 +1257,7 @@ function wait(st){
 function team(){
   seenT=Date.now();try{localStorage.setItem('skladgo.seen',seenT)}catch(e){}
   var h='<h1>Команда</h1><div class="card"><div class="info"><b>'+(isOwn?'👑 ':'👤 ')+esc(ME.name)+'</b><small>'+(isOwn?'Владелец · ':'Сотрудник · ')+esc(ME.phone)+' · '+esc(ME.mail)+'</small></div><button class="link" id="me">Изменить</button></div>';
+  if(window.skladAuth&&skladAuth.setPassword)h+='<button class="link" id="pwset" style="display:block">🔑 '+(skladAuth.hasPassword()?'Сменить пароль для входа по почте':'Пароль для входа по почте')+'</button>';
   if(window.skladAuth)h+='<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px"><button class="link" id="lo">Выйти</button><button class="link" id="swa">🔄 Сменить аккаунт</button>'+(isOwn?'':'<button class="link del" id="da">🗑 Удалить мой аккаунт</button>')+'</div>';
   // Значок на экране телефона. Android и компьютер предлагают установку сами (backend.js ловит это),
   // на iPhone такой кнопки нет — подсказываем, куда нажать
@@ -1270,7 +1272,7 @@ function team(){
   h+='<div class="lbl">Сотрудники склада ('+ac.length+')</div>';
   if(!ac.length)h+='<div class="empty">Сотрудники появятся здесь после регистрации по вашей ссылке</div>';
   ac.sort(function(a,b){return String(a.name).localeCompare(String(b.name),'ru')}).forEach(function(x){h+='<div class="card"><div class="info"><b>'+(x.owner?'👑 ':'')+esc(x.name)+(x.status==='blocked'?' · ⛔ заблокирован':'')+'</b>'+(isOwn?'<small>'+esc(x.phone)+' · '+esc(x.mail)+'</small>':'')+'</div>'+(isOwn&&!x.owner?(x.status==='blocked'?'<button class="link" data-ap="'+x._id+'">Вернуть доступ</button>':'<button class="link del" data-bl="'+x._id+'">Заблокировать</button>'):'')+'</div>'});
-  if(isOwn&&window.skladTeamExtra)h+=skladTeamExtra();   // тестовый режим (mock.js): покупатели
+  if(isOwn&&custOn)h+=custHtml();
   h+='<div class="lbl" style="margin-top:14px">Лента изменений</div>';
   if(!actList.length)h+='<div class="empty">Изменений пока нет</div>';
   h+=actList.slice(0,40).map(function(a){var d=new Date(a.t);return '<div class="log"><div><b>'+esc(a.by||'—')+'</b><small>'+esc(a.txt)+'</small></div><span style="color:var(--mu);font-size:12px;text-align:right">'+d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+'<br>'+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span></div>'}).join('');
@@ -1290,7 +1292,60 @@ function team(){
   if($('bzs'))$('bzs').onclick=function(){S.biz=$('bz').value.trim();save();logAct('изменил название магазина');toast('🏪 Сохранено')};
   [].forEach.call(document.querySelectorAll('[data-ap]'),function(b){b.onclick=function(){setSt(b.dataset.ap,'active')}});
   [].forEach.call(document.querySelectorAll('[data-bl]'),function(b){b.onclick=function(){setSt(b.dataset.bl,'blocked')}});
-  if(isOwn&&window.skladTeamBind)skladTeamBind();
+  if(isOwn&&custOn)custBind();
+  if($('pwset'))$('pwset').onclick=pwUI;
+}
+/* ===== Покупатели: входят по почте и паролю и видят только свой долг. Хозяин подтверждает
+   их и выбирает, чьи это долги (подсказка — по телефону). Статус и выбор держит база
+   (customers_guard): покупатель сам себя не подтвердит. В тестовом режиме mock.js
+   подменяет custList и custSet своими ===== */
+var custList=[],custOn=false;
+function custSnap(sn){custOn=true;custList=sn.docs.map(function(d){return d.data()});if(tab==='team'&&ME&&!$('ov').innerHTML)render()}
+function custSet(uid,ch,done){if(!sdb)return;sdb.doc('customers/'+uid).update(ch).then(function(){if(done)done()},function(){toast('⚠️ Не удалось сохранить — нет связи')})}
+function phd(p){return String(p||'').replace(/\D/g,'')}
+function custHtml(){
+  var pd=custList.filter(function(x){return x.status==='pending'}),ac=custList.filter(function(x){return x.status==='active'});
+  var h='<div class="lbl">🛍 Покупатели ('+(pd.length+ac.length)+')</div>';
+  if(!pd.length&&!ac.length)h+='<div class="empty">Покупатели появятся здесь после регистрации. Они увидят только свой долг</div>';
+  pd.forEach(function(x){
+    var m=D.people.filter(function(p){return p.phone&&phd(p.phone)===phd(x.phone)})[0];
+    h+='<div class="card" style="display:block"><div class="info"><b>⏳ <span data-notr>'+esc(x.name)+'</span></b><small>'+esc(x.phone)+(x.email?' · '+esc(x.email):'')+'</small></div>'
+      +'<select id="cs_'+esc(x.uid)+'" style="margin:8px 0"><option value="">Чьи это долги? — выберите человека</option>'+D.people.map(function(p){return '<option value="'+esc(p.id)+'"'+(m&&m.id===p.id?' selected':'')+'>'+esc(p.name)+(p.phone?' · '+esc(p.phone):'')+'</option>'}).join('')+'</select>'
+      +(m?'<small style="color:var(--in)">✓ Телефон совпал с «<span data-notr>'+esc(m.name)+'</span>»</small>':'<small style="color:var(--mu)">Телефон ни с кем в «Долгах» не совпал — проверьте, тот ли это человек</small>')
+      +'<div class="two" style="margin-top:8px"><button class="go ac" type="button" data-ca="'+esc(x.uid)+'">✓ Подтвердить</button><button class="go" type="button" data-cb="'+esc(x.uid)+'" style="background:var(--card);color:var(--out);border:1px solid var(--bd)">✕ Отклонить</button></div></div>';
+  });
+  ac.forEach(function(x){
+    var p=D.people.filter(function(q){return q.id===x.pid})[0];
+    h+='<div class="card"><div class="info"><b>🛍 <span data-notr>'+esc(x.name)+'</span></b><small>'+esc(x.phone)+' · видит долги: '+(p?'<span data-notr>'+esc(p.name)+'</span>':'—')+'</small></div><button class="link del" type="button" data-cu="'+esc(x.uid)+'">Отвязать</button></div>';
+  });
+  return h;
+}
+function custBind(){
+  var nm=function(uid){var c=custList.filter(function(x){return x.uid===uid})[0];return c?c.name:''};
+  [].forEach.call(document.querySelectorAll('[data-ca]'),function(b){b.onclick=function(){
+    var uid=b.dataset.ca,pid=$('cs_'+uid).value;if(!pid){toast('⚠️ Выберите, чьи это долги');return}
+    b.disabled=true;custSet(uid,{status:'active',pid:pid},function(){logAct('подтвердил покупателя: '+nm(uid));toast('✓ Покупатель подтверждён: '+nm(uid))});
+  }});
+  [].forEach.call(document.querySelectorAll('[data-cb]'),function(b){b.onclick=function(){var uid=b.dataset.cb;custSet(uid,{status:'blocked',pid:null},function(){logAct('отклонил покупателя: '+nm(uid))})}});
+  [].forEach.call(document.querySelectorAll('[data-cu]'),function(b){b.onclick=function(){
+    if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='Точно?';return}
+    var uid=b.dataset.cu;custSet(uid,{status:'pending',pid:null},function(){logAct('отвязал покупателя: '+nm(uid))});
+  }});
+}
+// Пароль для входа по почте — тем, кто входит через Google (хозяину и продавцам). Был пароль — нужен прежний
+function pwUI(){
+  var had=skladAuth.hasPassword();
+  open('<h2>🔑 '+(had?'Сменить пароль':'Пароль для входа по почте')+'</h2><small style="margin:4px 0 10px">Тогда войти можно и без Google: почта '+esc(ME&&ME.mail||'')+' и этот пароль. Не короче 8 знаков.</small>'
+    +(had?'<input id="pw0" type="password" autocomplete="current-password" placeholder="Прежний пароль">':'')
+    +'<input id="pw1" type="password" autocomplete="new-password" placeholder="Новый пароль"><input id="pw2" type="password" autocomplete="new-password" placeholder="Новый пароль ещё раз"><button class="go ac" id="pwok" type="button" style="width:100%">Сохранить</button>');
+  $('pwok').onclick=function(){
+    var a=$('pw1').value,b=$('pw2').value,btn=this;
+    if(a.length<8){toast('⚠️ Пароль — не короче 8 знаков');return}
+    if(a!==b){toast('⚠️ Пароли не совпадают');return}
+    btn.disabled=true;
+    skladAuth.setPassword(a,had?$('pw0').value:undefined).then(function(){close();toast('🔑 Пароль сохранён');render()},function(e){btn.disabled=false;toast('⚠️ '+((e&&e.message)||'Не удалось сохранить'))});
+  };
+  $('pw1').focus();
 }
 function dgt(){try{return JSON.parse(localStorage.getItem('skladgo.draft'))||{}}catch(e){return {}}}
 function gate(edit){

@@ -6,8 +6,8 @@
 
    Данные склада сюда не попадают: запросы к серверу (Supabase или свой, /api) идут мимо. Склад
    и долги программа и так держит в памяти телефона и досылает, когда появится связь. */
-const V = 'skladgo-v5';   // номер меняем, только если меняется список ниже
-const SHELL = ['/', '/index.html', '/theme.js', '/tg.js', '/i18n.js', '/merge.js', '/barcode.js', '/scan.js', '/config.js', '/backend-server.js', '/backend.js', '/demo.js', '/mock.js', '/app.js',
+const V = 'skladgo-v6';   // номер меняем, только если меняется список ниже
+const SHELL = ['/', '/index.html', '/theme.js', '/tg.js', '/i18n.js', '/merge.js', '/barcode.js', '/scan.js', '/config.js', '/backend-server.js', '/customer.js', '/backend.js', '/demo.js', '/mock.js', '/app.js',
   '/logo.svg', '/privacy.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
 // Supabase грузится с чужой раздачи. Версия в адресе зафиксирована, поэтому файл не меняется — берём из копии сразу
 const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';

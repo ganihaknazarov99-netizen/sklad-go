@@ -60,8 +60,8 @@ nav button b{display:flex;justify-content:center;align-items:center;height:28px;
 input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:none;display:block;height:48px;text-align:left}
 .seg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:12px}
 .seg2{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:12px}
-.seg2 button{border:0;background:none;padding:10px;border-radius:9px;font-weight:600;color:var(--mu)}
-.seg2 button.on{background:var(--ac);color:#fff}
+.seg2 button,.seg3 button{border:0;background:none;padding:10px;border-radius:9px;font-weight:600;color:var(--mu)}
+.seg2 button.on,.seg3 button.on{background:var(--ac);color:#fff}
 .bdg{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.5px;padding:6px 12px;border-radius:99px;margin:6px 0}
 .bdg.g{background:rgba(22,163,74,.16);color:var(--in)}.bdg.r{background:rgba(234,88,12,.16);color:var(--out)}
 .big{font-size:38px;font-weight:800;margin:2px 0 10px}
@@ -154,6 +154,8 @@ input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:n
 <script src="config.js"></script>
 <!-- Свой сервер на Railway: переводчик для backend.js (включается в config.js) -->
 <script src="backend-server.js"></script>
+<!-- Экран покупателя: только его долг (и в магазине, и в тестовом режиме) -->
+<script src="customer.js"></script>
 <!-- backend.js сам решает: сервер (config.js заполнен) или демо, и после входа грузит app.js -->
 <script src="backend.js"></script>
 
