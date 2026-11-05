@@ -124,7 +124,7 @@
           if (r.error && /^network/.test(r.error.message)) return { data: { session: null }, error: { name: 'AuthRetryableFetchError', message: r.error.message } };
           if (!r.data) return { data: { session: null }, error: null };
           return { data: { session: { user: { id: r.data.id, email: r.data.email || '', user_metadata: { full_name: r.data.name || '' },
-            kind: r.data.kind || 'staff', has_password: !!r.data.has_password } } }, error: null };
+            kind: r.data.kind || 'staff', has_password: !!r.data.has_password, has_totp: !!r.data.has_totp } } }, error: null };
         });
       },
       // Вход ведёт сервер: он отправит к Google (со списком аккаунтов) и вернёт сюда
@@ -136,9 +136,14 @@
       },
       signOut: function () { return call('POST', '/logout').then(function (r) { return { error: r.error }; }); },
       // Вход и регистрация по почте и паролю. Cookie входа ставит сервер — здесь ничего не храним
-      signInWithPassword: function (o) { return call('POST', '/auth/password/login', { email: o.email, password: o.password }); },
+      signInWithPassword: function (o) { return call('POST', '/auth/password/login', { email: o.email, password: o.password, code: o.code }); },
       signUp: function (o) { return call('POST', '/auth/password/signup', { role: o.role, name: o.name, phone: o.phone, email: o.email, password: o.password }); },
       setPassword: function (pass, current) { return call('POST', '/password', { password: pass, current: current }); },
+      // Код из приложения (Google Authenticator) к входу хозяина по паролю
+      totpStart: function (pass) { return call('POST', '/totp/start', { password: pass }); },
+      totpConfirm: function (code) { return call('POST', '/totp/confirm', { code: code }); },
+      totpOff: function (pass) { return call('POST', '/totp/off', { password: pass }); },
+      logoutAll: function () { return call('POST', '/logout_all').then(function (r) { return { error: r.error }; }); },
       onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () {} } } }; }
     };
 

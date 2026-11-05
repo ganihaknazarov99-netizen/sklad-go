@@ -184,12 +184,14 @@ test('вход по паролю и покупатели на своём сер�
     await pg.exec('alter table public.staff enable trigger staff_guard');
   });
 
-  await t.test('хозяин, вошедший через Google, задаёт пароль и входит по нему', async () => {
+  await t.test('хозяин, вошедший через Google, задаёт пароль; по одному паролю хозяин не входит', async () => {
     assert.equal((await хозяин.go('GET', '/api/me')).json.data.has_password, false);
     assert.equal((await хозяин.go('POST', '/api/password', { password: 'owner-pass-1' })).code, 200);
     const к = клиент(app, '10.0.0.6');
-    assert.equal((await к.go('POST', '/auth/password/login', { email: ПОЧТА_ХОЗЯИНА, password: 'owner-pass-1' })).code, 200);
-    assert.equal((await к.go('POST', '/api/rpc/is_owner')).json.data, true);
+    const r = await к.go('POST', '/auth/password/login', { email: ПОЧТА_ХОЗЯИНА, password: 'owner-pass-1' });
+    assert.equal(r.code, 403);
+    assert.equal(r.json.error.code, 'owner_needs_code', 'хозяину без кода из приложения — только Google');
+    assert.equal((await к.go('GET', '/api/me')).code, 401);
     assert.equal((await хозяин.go('POST', '/api/password', { password: 'owner-pass-2' })).code, 403, 'сменить — только зная прежний');
     assert.equal((await хозяин.go('POST', '/api/password', { password: 'owner-pass-2', current: 'owner-pass-1' })).code, 200);
   });

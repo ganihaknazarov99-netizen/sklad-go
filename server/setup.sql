@@ -24,6 +24,11 @@ create table if not exists auth.users (
 -- Почта при таком входе не подтверждена Google (email_confirmed_at пуст), поэтому стать
 -- по ней хозяином нельзя (may_claim_owner в schema.sql)
 alter table auth.users add column if not exists pass_hash text;
+-- Код из приложения (Google Authenticator) к входу по паролю: общий секрет, секрет на время
+-- настройки и номер последнего принятого окна — один и тот же код дважды не проходит
+alter table auth.users add column if not exists totp_secret text,
+                       add column if not exists totp_pending text,
+                       add column if not exists totp_step bigint not null default -1;
 create or replace function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 
