@@ -71,7 +71,8 @@ async function seed(pg, db) {
   };
   await migrate(db);
   await seed(pg, db);
-  const app = createApp({ db, publicUrl: ORIGIN, secureCookies: false, googleId: '', googleSecret: '' });
+  // открыть могут и как localhost — это тот же компьютер
+  const app = createApp({ db, publicUrl: ORIGIN, origins: ['http://localhost:' + PORT], secureCookies: false, googleId: '', googleSecret: '' });
   await pg.listen('sklad', app.notify);
 
   http.createServer((req, res) => {
