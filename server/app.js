@@ -29,6 +29,9 @@ const ТАБЛИЦЫ = {
 const ВЫЗОВЫ = ['doc_set', 'is_owner', 'is_active', 'delete_my_account', 'my_debt'];
 const ПАРОЛЬ_ОТ = 8, ПАРОЛЬ_ДО = 200;
 const ПОПЫТОК = 10, ОКНО = 15 * 60000;   // неудачных входов с одного адреса на одну почту за 15 минут
+const НА_ПОЧТУ = 30;                     // на одну почту со всех адресов вместе: адрес сменить легко, почту — нет
+const КОДОВ = 5;                         // неверных кодов из приложения на одну почту за те же 15 минут
+const КЛЮЧЕЙ = 10000;                    // столько счётчиков неудач держим в памяти, не больше
 // Отказы правил базы — их текст программа знает (backend.js)
 const ОТКАЗЫ = /\b(version_conflict|debt_changed|debt_vanished|log_vanished|owner_cannot_delete|blocked_cannot_delete|doc_id_locked|bad_doc|not authenticated)\b/;
 
@@ -78,8 +81,11 @@ function createApp(o) {
   }
   const rnd = (n) => crypto.randomBytes(n || 32).toString('base64url');
   const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
-  // Куда вернуть после входа — только путь на этом же сайте
-  const путь = (p) => (typeof p === 'string' && /^\/(?![/\\])/.test(p) ? p : '/');
+  // Куда вернуть после входа — только путь на этом же сайте. Браузер выбрасывает из адреса
+  // табуляцию и переводы строки и читает «\» как «/»: для него «/\t/evil.example» и «/\evil» —
+  // это «//evil.example», чужой сайт. Поэтому в пути только видимые знаки ASCII и нигде нет «\»
+  // (программа и так присылает путь закодированным — URL.pathname)
+  const путь = (p) => (typeof p === 'string' && /^\/(?![/\\])[\x20-\x5b\x5d-\x7e]*$/.test(p) ? p : '/');
 
   // В базе bigint — время в миллисекундах и версия документа. Драйвер отдаёт их строкой,
   // а программа ждёт число
@@ -175,14 +181,35 @@ function createApp(o) {
 
   // Тот же аккаунт Google — тот же человек. Перенесённые из Supabase узнаются по почте,
   // которую Google там уже подтвердил (google_sub у них пока пуст). Почту, которую Google
-  // не подтвердил, не записываем: по ней хозяином не стать и чужое место не занять
+  // не подтвердил, не записываем: по ней хозяином не стать и чужое место не занять.
+  // Почта, которую Google подтвердил, — того, кто им вошёл. Аккаунт по паролю на эту же
+  // почту (её никто не проверял) её уступает: иначе любой мог заранее завести аккаунт на
+  // Gmail хозяина или продавца, и настоящий человек после Google оставался без почты —
+  // хозяином ему не стать. Саму ту запись вошедшему не отдаём: в ней всё, что вписал её
+  // заводивший (имя, «я покупатель»). Она остаётся без почты, пароля и входов — её
+  // пароль больше никуда не пускает
   async function человек(p) {
     const sub = String(p.sub);
     const name = String(p.name || '').slice(0, 100);
     const mail = (p.email_verified === true || p.email_verified === 'true') && p.email ? String(p.email).trim().toLowerCase() : null;
+    if (mail) {
+      const уступили = await db.base(
+        `update auth.users set email = null, pass_hash = null, totp_secret = null, totp_pending = null, totp_step = -1
+          where lower(email) = $1 and email_confirmed_at is null returning id`, [mail]);
+      for (const x of уступили) {
+        await db.base('delete from srv.sessions where user_id = $1', [x.id]);
+        закрыть(x.id);
+        log('Вход через Google: почту подтвердил Google — аккаунт по паролю ' + x.id + ' её уступил');
+      }
+    }
+    // Тот же Google — та же запись. Почты у неё нет (её держал аккаунт по паролю, или Google
+    // тогда её не подтвердил) — теперь она свободна и подтверждена: записываем
+    const свободна = `$3::text is not null and u.email is null and not exists (select 1 from auth.users x where lower(x.email) = $3::text)`;
     let r = await db.base(
-      `update auth.users set name = case when $2 <> '' then $2 else name end, last_sign_in_at = now()
-        where google_sub = $1 returning id`, [sub, name]);
+      `update auth.users u set name = case when $2 <> '' then $2 else u.name end, last_sign_in_at = now(),
+              email_confirmed_at = case when ${свободна} then now() else u.email_confirmed_at end,
+              email = case when ${свободна} then $3::text else u.email end
+        where u.google_sub = $1 returning u.id`, [sub, name, mail]);
     if (!r[0] && mail) {
       r = await db.base(
         `update auth.users set google_sub = $1, name = case when $2 <> '' then $2 else name end, last_sign_in_at = now()
@@ -252,15 +279,44 @@ function createApp(o) {
     const want = Buffer.from(h, 'hex');
     return want.length === k.length && crypto.timingSafeEqual(want, k);
   }
-  const ip = (req) => String(req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
-  function много(key) {
-    const t = сейчас(), L = (неудачи.get(key) || []).filter((x) => t - x < ОКНО);
-    неудачи.set(key, L);
-    return L.length >= ПОПЫТОК;
+  // Адрес посетителя — для счёта попыток. X-Forwarded-For присылает и сам посетитель: первую
+  // запись в нём можно ставить новую на каждую попытку — так предел и обходили. Поэтому ему
+  // не верим вовсе. Верим только заголовку, который ставит наш прокси, и только если index.js
+  // сказал, что прокси есть (ipHeader): на Railway это X-Real-IP — прокси Railway пишет его
+  // сам, затирая присланное (docs.railway.com → Public Networking → Specs & Limits); число
+  // прокси в цепочке Railway не обещает, поэтому «последняя запись X-Forwarded-For» тоже не
+  // годится. Нет такого заголовка (свой компьютер, тесты) — адрес соединения: его не подделать.
+  // Через Vercel (skladgo.com) адрес — это Vercel, общий для многих: поэтому главный предел
+  // стоит на почту (НА_ПОЧТУ), а адрес лишь делит счёт помельче
+  const заголовокАдреса = String(o.ipHeader || '').toLowerCase();
+  function ip(req) {
+    const h = заголовокАдреса && String(req.headers[заголовокАдреса] || '').trim();
+    return h || String((req.socket && req.socket.remoteAddress) || '');
   }
-  function неудача(key) {
-    неудачи.set(key, (неудачи.get(key) || []).concat(сейчас()));
-    if (неудачи.size > 10000) неудачи.clear();   // память сервера не забиваем
+  function свежие(key) {
+    const t = сейчас(), L = (неудачи.get(key) || []).filter((x) => t - x < ОКНО);
+    if (L.length) неудачи.set(key, L); else неудачи.delete(key);
+    return L;
+  }
+  const много = (key, предел) => свежие(key).length >= (предел || ПОПЫТОК);
+  function неудача(...keys) {
+    const t = сейчас();
+    keys.forEach((key) => {
+      const L = свежие(key).concat(t);
+      неудачи.delete(key);   // свежий счёт — в конец: Map помнит порядок, в начале остаются давние
+      неудачи.set(key, L);
+    });
+    if (неудачи.size > КЛЮЧЕЙ) убрать(t);
+  }
+  // Память сервера не забиваем, но и весь счёт не стираем: раньше на 10 001-м ключе он
+  // обнулялся у всех, и пачка пустых попыток с разных почт открывала перебор заново.
+  // Сначала уходят ключи, чьё окно прошло. Мало — ключи с меньшим числом неудач, давние
+  // первыми: счёт того, чей пароль перебирают (неудач у него много), уходит последним
+  function убрать(t) {
+    for (const [k, L] of неудачи) if (!L.length || t - L[L.length - 1] >= ОКНО) неудачи.delete(k);
+    if (неудачи.size <= КЛЮЧЕЙ) return;
+    [...неудачи].map(([k, L], i) => [k, L.length, i]).sort((a, b) => a[1] - b[1] || a[2] - b[2])
+      .slice(0, неудачи.size - Math.floor(КЛЮЧЕЙ * 0.9)).forEach(([k]) => неудачи.delete(k));
   }
   const почта = (e) => String(e || '').trim().toLowerCase();
   const цифры = (p) => String(p || '').replace(/\D/g, '');
@@ -299,30 +355,42 @@ function createApp(o) {
 
   async function входПаролем(req, res) {
     const a = await body(req);
-    const mail = почта(a.email), key = 'in|' + ip(req) + '|' + mail;
-    if (много(key)) return нет(res, 429, 'rate_limited', 'Слишком много попыток. Подождите 15 минут');
+    // Три счёта неудач: с этого адреса на эту почту; на эту почту со всех адресов (адрес
+    // меняют на каждую попытку, почта у перебора одна); неверные коды из приложения — у кода
+    // всего миллион вариантов, ему предел строже. Проверяем все три до пароля: ответ «подождите»
+    // одинаков при верном и неверном пароле и ничего не выдаёт
+    const mail = почта(a.email), сАдреса = 'in|' + ip(req) + '|' + mail, наПочту = 'mail|' + mail, коды = 'code|' + mail;
+    // длиннее почт не бывает (регистрация — до 200 знаков); и память счётом не раздуть
+    if (mail.length > 254) return нет(res, 401, 'bad_login', 'Неверная почта или пароль');
+    if (много(сАдреса) || много(наПочту, НА_ПОЧТУ) || много(коды, КОДОВ)) return нет(res, 429, 'rate_limited', 'Слишком много попыток. Подождите 15 минут');
     const r = await db.base('select id, pass_hash from auth.users where lower(email) = $1', [mail]);
     // нет такой почты — отпечаток всё равно считаем: по времени ответа не понять, есть ли аккаунт
     const good = await верен(a.password || '', r[0] && r[0].pass_hash);
     if (!r[0] || !r[0].pass_hash || !good) {
-      неудача(key);
+      неудача(сАдреса, наПочту);
       return нет(res, 401, 'bad_login', 'Неверная почта или пароль');
     }
     // Второй шаг: код из приложения. Включён — без кода не пускаем. Хозяин без кода по паролю
-    // не входит вовсе: у него есть Google с его подтверждением, а пароль один — лёгкая добыча
+    // не входит вовсе: у него есть Google с его подтверждением, а пароль один — лёгкая добыча.
+    // «Нужен код» и «хозяину — только с кодом» говорят, что пароль верен, поэтому тоже идут в
+    // счёт: подбирать пароль по ним не быстрее, чем по «неверно»
     const u = (await db.base('select totp_secret, totp_step from auth.users where id = $1', [r[0].id]))[0];
     if (u.totp_secret) {
-      if (!String(a.code || '').trim()) return нет(res, 401, 'need_code', 'Введите код из приложения');
+      if (!String(a.code || '').trim()) {
+        неудача(сАдреса, наПочту);
+        return нет(res, 401, 'need_code', 'Введите код из приложения');
+      }
       const step = TOTP.verify(u.totp_secret, a.code, сейчас(), Number(u.totp_step));
       if (step === null) {
-        неудача(key);
+        неудача(сАдреса, наПочту, коды);
         return нет(res, 401, 'bad_code', 'Код не подходит. Введите новый код из приложения');
       }
       await db.base('update auth.users set totp_step = $2 where id = $1', [r[0].id, step]);
     } else if (await хозяин(r[0].id)) {
+      неудача(сАдреса, наПочту);
       return нет(res, 403, 'owner_needs_code', 'Хозяин входит по паролю только с кодом из приложения. Войдите через Google и включите код во вкладке «Команда»');
     }
-    неудачи.delete(key);
+    [сАдреса, наПочту, коды].forEach((k) => неудачи.delete(k));
     await db.base('update auth.users set last_sign_in_at = now() where id = $1', [r[0].id]);
     await сессия(res, r[0].id);
     return ok(res, { id: r[0].id });
@@ -356,10 +424,12 @@ function createApp(o) {
       const step = TOTP.verify(r.totp_pending, a.code, сейчас(), -1);
       if (step === null) return нет(res, 400, 'bad_code', 'Код не подходит. Проверьте, что время на телефоне верное, и введите новый код');
       await db.base('update auth.users set totp_secret = totp_pending, totp_pending = null, totp_step = $2 where id = $1', [me.id, step]);
+      неудачи.delete('code|' + почта(me.email));   // новый секрет — счёт неверных кодов с нуля
       return ok(res, null);
     }
     if (!(await парольВерен(res, me, a.password))) return;
     await db.base('update auth.users set totp_secret = null, totp_pending = null, totp_step = -1 where id = $1', [me.id]);
+    неудачи.delete('code|' + почта(me.email));   // кода больше нет — и его счёт не держит вход
     return ok(res, null);
   }
 

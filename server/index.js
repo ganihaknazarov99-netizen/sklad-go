@@ -30,6 +30,8 @@ const АДРЕСА = ['https://skladgo.com', 'https://www.skladgo.com'];
     origins: АДРЕСА.concat(String(env.EXTRA_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)),
     googleId: env.GOOGLE_CLIENT_ID,
     googleSecret: env.GOOGLE_CLIENT_SECRET,
+    // адрес посетителя для счёта попыток входа ставит прокси Railway, в этом заголовке
+    ipHeader: 'x-real-ip',
     fetch,
   });
   db.listen(app.notify);
