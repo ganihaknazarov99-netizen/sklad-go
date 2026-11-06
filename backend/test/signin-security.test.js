@@ -141,7 +141,7 @@ test('вход по паролю: подставной адрес не даёт 
 
   await t.test('регистрации пачкой: новый X-Forwarded-For на каждую не помогает', async () => {
     const к = клиент(сервер(true), '100.64.0.3');
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 30; i++) {   // 30 — предел регистраций с одного адреса
       const r = await к.go('POST', '/auth/password/signup', { role: 'staff', name: 'Спам ' + i, email: 'spam' + i + '@test.tj', password: 'parol-123' }, { 'x-forwarded-for': новый(), 'x-real-ip': '203.0.113.7' });
       assert.equal(r.code, 200);
     }
