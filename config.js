@@ -18,6 +18,10 @@
    Тайные ключи (secret, service_role, ключ Google) сюда не вписывать никогда. */
 (function () {
   var МАГАЗИН = {
+    // Свой адрес магазина (куплен 4 ноября 2026, Name.com). www Vercel перенаправляет сюда же
+    'skladgo.com': { api: '/api' },
+    'www.skladgo.com': { api: '/api' },
+    // Прежний адрес магазина: работает как раньше, данные и вход те же
     'skladgo.vercel.app': { api: '/api' },
     // Адрес для проверки правок сервера, прежде чем они попадут в магазин
     'sklad-go-git-claude-happy-agnesi-467428-gani26.vercel.app': { api: '/api' },

@@ -131,7 +131,10 @@
       signInWithOAuth: function (o) {
         var to = '/';
         try { to = new URL((o && o.options && o.options.redirectTo) || root.location.href).pathname || '/'; } catch (e) {}
-        root.location.assign(authBase + '/auth/google?to=' + encodeURIComponent(to));
+        // from — с какого адреса пришли (skladgo.com или skladgo.vercel.app): туда Google и вернёт
+        var from = '';
+        try { from = root.location.origin || new URL(root.location.href).origin; } catch (e) {}
+        root.location.assign(authBase + '/auth/google?to=' + encodeURIComponent(to) + (from ? '&from=' + encodeURIComponent(from) : ''));
         return Promise.resolve({ data: {}, error: null });
       },
       signOut: function () { return call('POST', '/logout').then(function (r) { return { error: r.error }; }); },

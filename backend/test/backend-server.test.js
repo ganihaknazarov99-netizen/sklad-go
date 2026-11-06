@@ -91,7 +91,7 @@ test('склад на своём сервере: backend-server.js говори�
     let куда = null;
     global.location = { href: 'https://skladgo.vercel.app/', assign: (u) => { куда = u; } };
     await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: 'https://skladgo.vercel.app/', queryParams: { prompt: 'select_account' } } });
-    assert.equal(куда, '/auth/google?to=%2F');
+    assert.equal(куда, '/auth/google?to=%2F&from=https%3A%2F%2Fskladgo.vercel.app', 'сервер знает, на какой адрес вернуть');
     // дальше браузер идёт по перенаправлениям сам
     const g = new URL((await br.fetch(куда)).headers.location);
     assert.equal(g.searchParams.get('prompt'), 'select_account');
@@ -187,7 +187,7 @@ test('config.js { api } включает свой сервер: экран вх�
   await new Promise((r) => setTimeout(r, 10));
   assert.match(els.auth.innerHTML, /id="gin"/, 'экран входа');
   els.gin.onclick.call(els.gin);
-  assert.equal(куда, '/auth/google?to=%2F');
+  assert.equal(куда, '/auth/google?to=%2F&from=https%3A%2F%2Fskladgo.vercel.app', 'сервер знает, на какой адрес вернуть');
   delete global.SKLAD_CONFIG;
   delete global.supabase;
 });
