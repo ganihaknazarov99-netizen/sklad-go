@@ -1,5 +1,5 @@
 'use strict';
-/* QR-код, который мы собираем сами (frontend/qr.js).
+/* QR-код, который мы собираем сами (корневой qr.js).
 
    Проверять его на глаз бесполезно: неправильный код выглядит точно так же,
    как правильный, и разница видна только телефону. Поэтому здесь три опоры:
@@ -16,7 +16,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const win = {};
-new Function('window', fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'qr.js'), 'utf8'))(win);
+new Function('window', fs.readFileSync(path.join(__dirname, '..', '..', 'qr.js'), 'utf8'))(win);
 const QR = win.SkladQR, I = QR._inner;
 const bits = (v, n) => v.toString(2).padStart(n, '0');
 

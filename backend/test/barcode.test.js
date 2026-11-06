@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
-const B = require('../../frontend/barcode.js');
+const B = require('../../barcode.js');
 
 const dir = path.join(__dirname, 'fixtures', 'barcodes');
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
