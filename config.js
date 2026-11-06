@@ -20,7 +20,9 @@
   var МАГАЗИН = {
     'skladgo.vercel.app': { api: '/api' },
     // Адрес для проверки правок сервера, прежде чем они попадут в магазин
-    'sklad-go-git-claude-happy-agnesi-467428-gani26.vercel.app': { api: '/api' }
+    'sklad-go-git-claude-happy-agnesi-467428-gani26.vercel.app': { api: '/api' },
+    // Ссылка для друзей: сначала регистрация, потом свой пустой склад в этом телефоне (mock.js)
+    'sklad-go-gani26.vercel.app': { mock: true, own: true }
   };
   // Тестовый режим (адрес с ?mock, выключить — ?mock=off): вход по почте и паролю как
   // владелец или покупатель, всё только в этом браузере (mock.js). На адресах
