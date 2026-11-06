@@ -187,8 +187,8 @@ end $$;
 --     и какого числа — как было. Ошибку исправляют обратной записью;
 --   · удалить долг можно только в корзину, а из корзины он уходит только
 --     назад в долги. Телефон держит в корзине 100 последних и лишнее обрезает,
---     но у продавца база обрезанное кладёт назад: вытеснить долг из корзины
---     может только хозяин;
+--     но база обрезанное кладёт назад: сама собой корзина долгов не теряет
+--     ничего. Убрать из неё долг совсем может только хозяин — со строчкой в ленте;
 --   · человек не пропадёт из долгов, пока за ним остаются записи;
 --   · запись в истории склада стирается, только если её отменили сразу
 --     (10 минут) или её вытеснили новые (история держит 400 последних);
@@ -205,7 +205,10 @@ end $$;
 --   · обрезанное телефоном по краю, что вытеснять ещё рано, база кладёт назад;
 --   · всё, что ушло из документа (вытеснено, отменено, стёрто хозяином), база
 --     сама откладывает в docs_archive — пропасть насовсем не может ничего;
---   · продавец поменял остаток товара без записи в истории — в ленте строчка.
+--   · продавец поменял остаток товара без записи в истории — в ленте строчка;
+--   · от продавца за одну запись — не больше 500 новых записей истории или долгов,
+--     и каждая не длиннее 2000 знаков: раздуть документ так, чтобы тормозила каждая
+--     следующая продажа или забивался архив, нельзя.
 
 -- Список из документа. Не список — значит, пусто.
 create or replace function public.jarr(j jsonb) returns jsonb
@@ -314,6 +317,21 @@ create table if not exists public.docs_archive (
 );
 create index if not exists docs_archive_t_idx on public.docs_archive (t desc);
 
+-- В архив — запись как была, но не длиннее 2000 знаков. Иначе «внёс запись с огромной
+-- заметкой — отменил» по кругу забивало бы базу тем, что не стереть.
+create or replace function public.arch_rec(x jsonb) returns jsonb
+  language sql immutable set search_path = public as $$
+  select case when length(x::text) <= 2000 then x
+              else jsonb_build_object('cut', true, 'head', left(x::text, 2000)) end
+$$;
+
+-- Запись от продавца — не длиннее 2000 знаков (заметка в программе — пара строк).
+-- Прежнюю, что не выросла, не трогаем.
+create or replace function public.too_big(x jsonb, was jsonb) returns boolean
+  language sql immutable set search_path = public as $$
+  select length(x::text) > 2000 and (was is null or length(x::text) > length(was::text))
+$$;
+
 -- Запись в истории склада узнаём по времени, операции, товару, количеству и сумме.
 create or replace function public.log_key(l jsonb) returns text
   language sql immutable set search_path = public as $$
@@ -385,36 +403,45 @@ begin
                          where e->>'id' is not null), '{}'::jsonb);
     ncnt   := jsonb_array_length(public.jarr(new.data->'trash'));
 
+    -- Продавец: не больше 500 новых долгов за одну запись (столько не наберёт и
+    -- телефон, долго бывший без связи) и каждая запись — не длиннее 2000 знаков.
+    -- Иначе одной записью можно было раздуть долги так, что тормозила бы каждая
+    -- следующая запись, а вычистить это может только хозяин.
+    if not boss then
+      if (select count(*) from public.debt_recs(new.data) n where (known -> n.id) is null) > 500
+         or exists (select 1 from public.debt_recs(new.data) n where public.too_big(n.rec, known -> n.id))
+         or exists (select 1 from jsonb_array_elements(public.jarr(new.data->'trash')) e
+                     where public.too_big(case when jsonb_typeof(e) = 'object' then e - 'op' - 'ops' else e end,
+                                          case when jsonb_typeof(ptrash -> (e->>'id')) = 'object'
+                                               then (ptrash -> (e->>'id')) - 'op' - 'ops' end)) then
+        raise exception 'bad_doc';
+      end if;
+    end if;
+
     -- Записанный долг изменили — где бы он ни лежал, в списке или в корзине.
     select count(*) into changed
       from public.debt_recs(new.data) n
      where (known -> n.id) is not null and not public.debt_same(known -> n.id, n.rec);
 
     -- Записи долгов, которых в новой версии нет нигде, и что с каждой:
-    --   evicted — хозяин вытеснил запись корзины по-честному: в новой корзине сто
-    --             настоящих удалений (с долгами внутри), и все новее по часам базы.
-    --             Пустые или чужие записи корзины в счёт не идут;
-    --   back    — телефон обрезал корзину по краю (держит 100), а вытеснять нельзя:
-    --             база кладёт ту запись корзины назад. У продавца — всегда так,
-    --             вытеснить долг из корзины он не может никакой чередой записей;
-    --   gone    — пропала: продавцу отказ, хозяину строчка в ленте.
+    --   back — телефон обрезал корзину по краю (держит 100): база кладёт ту запись
+    --          корзины назад. Сама собой корзина долгов не вытесняет ничего — ни у
+    --          продавца, ни у хозяина. Раньше хозяйская программа, обрезая корзину,
+    --          выталкивала старый долг, а продавец мог заранее подложить в корзину сто
+    --          записей «новее» — и долг уходил без следа в ленте;
+    --   gone — пропала: продавцу отказ, хозяину строчка в ленте.
+    -- Корзина поэтому может держать больше 100 — растёт она только от удалённых долгов.
     with pt as (
-      select e, e->>'id' as id, i as pos, public.rec_time(e, cap) as eff
+      select e, e->>'id' as id, i as pos
         from jsonb_array_elements(public.jarr(prev->'trash')) with ordinality x(e, i)
     ),
     lim as (   -- что из прежней корзины осталось: всё, что раньше него, — обрезанный край
       select min(pos) as minpos, min(public.jnum(e->'t')) as mint
         from pt where id is not null and ntrash ? id
     ),
-    nt as (
-      select case when ptrash ? (e->>'id') then public.rec_time(ptrash -> (e->>'id'), cap) else nowms end as eff
-        from jsonb_array_elements(public.jarr(new.data->'trash')) e
-       where exists (select 1 from public.trash_recs(e))
-    ),
     ptf as (
       select pt.pos, pt.e,
              case
-               when boss and (select count(*) from nt where nt.eff > pt.eff) >= 100 then 'evicted'
                when ncnt >= 100 and (lim.minpos is null or pt.pos < lim.minpos
                                      or public.jnum(pt.e->'t') < lim.mint) then 'back'
                else 'gone'
@@ -457,14 +484,14 @@ begin
       insert into public.activity (txt) values ('переписал задним числом записи долгов: ' || (changed + gone));
     end if;
 
-    -- Ушедшее из документа — в архив: вытесненное, стёртое и прежний вид переписанного.
+    -- Ушедшее из документа — в архив: стёртое хозяином и прежний вид переписанного.
     insert into public.docs_archive (t, doc, why, "by", uid, rec)
-      select nowms, 'debts', case f->>'fate' when 'gone' then 'removed' else f->>'fate' end, who, me, f->'rec'
+      select nowms, 'debts', 'removed', who, me, public.arch_rec(f->'rec')
         from jsonb_array_elements(outs) f
-       where f->>'fate' in ('evicted', 'gone');
+       where f->>'fate' = 'gone';
     if changed > 0 then
       insert into public.docs_archive (t, doc, why, "by", uid, rec)
-        select nowms, 'debts', 'changed', who, me, known -> n.id
+        select nowms, 'debts', 'changed', who, me, public.arch_rec(known -> n.id)
           from public.debt_recs(new.data) n
          where (known -> n.id) is not null and not public.debt_same(known -> n.id, n.rec);
     end if;
@@ -500,6 +527,18 @@ begin
                         from jsonb_array_elements(public.jarr(new.data->'log')) x), '{}'::jsonb);
     ncnt := jsonb_array_length(public.jarr(new.data->'log'));
 
+    -- Продавец: не больше 500 новых записей истории за одну запись (сам телефон держит
+    -- 400 — больше ему внести нечего) и каждая — не длиннее 2000 знаков. Иначе одной
+    -- записью на тысячи строк можно было надолго затормозить каждую следующую продажу.
+    if not boss then
+      if (select count(*) from jsonb_array_elements(public.jarr(new.data->'log')) x
+           where not (plog ? public.log_key(x))) > 500
+         or exists (select 1 from jsonb_array_elements(public.jarr(new.data->'log')) x
+                     where public.too_big(x, plog -> public.log_key(x))) then
+        raise exception 'bad_doc';
+      end if;
+    end if;
+
     -- Записи истории, которых в новой версии нет, и что с каждой:
     --   undone  — отменили сразу: запись свежая (10 минут) и по часам базы, и по
     --             своему времени. Старую запись «свежей» не сделать: время её
@@ -507,7 +546,10 @@ begin
     --   evicted — вытеснили новые: в истории 400 записей новее, и все старше
     --             10 минут — их уже не отменить, они останутся. Записи, внесённые
     --             только что, в счёт не идут: иначе внёс 400, старое вытеснилось,
-    --             а свои 400 «отменил сразу»;
+    --             а свои 400 «отменил сразу». Записи одного времени (внесённые одной
+    --             записью) идут по месту в истории — так и они вытесняют друг друга,
+    --             и история не разрастается. Порог (400-я устоявшаяся запись) считается
+    --             один раз, а не для каждой записи заново;
     --   back    — телефон обрезал историю по краю (держит 400), а вытеснять ещё
     --             рано: база кладёт запись назад. История — 400 устоявшихся записей
     --             плюс внесённое за последние 10 минут;
@@ -520,7 +562,7 @@ begin
       select max(pos) as maxpos, min(public.jnum(l->'t')) as mint from p where nlog ? k
     ),
     miss as (
-      select p.l, p.pos, p.eff,
+      select p.l, p.pos, p.eff, ncnt + p.pos as ord,
              nowms - p.eff < 600000 as young,
              ncnt >= 400 and (lim.maxpos is null or p.pos > lim.maxpos
                               or public.jnum(p.l->'t') < lim.mint) as tail
@@ -528,15 +570,21 @@ begin
        where not (nlog ? p.k)
     ),
     s as (     -- устоявшиеся записи (старше 10 минут), что остаются или могут остаться
-      select eff from p where nlog ? k and nowms - eff >= 600000
+      select p.eff, n.i as ord
+        from jsonb_array_elements(public.jarr(new.data->'log')) with ordinality n(x, i)
+        join p on p.k = public.log_key(n.x)
+       where nowms - p.eff >= 600000
       union all
-      select eff from miss where tail and not young
-    )
+      select eff, ord from miss where tail and not young
+    ),
+    thr as (select eff, ord from s order by eff desc, ord asc offset 399 limit 1)
     select coalesce(jsonb_agg(jsonb_build_object(
              'l', m.l, 'pos', m.pos,
              'fate', case
                        when m.young and nowms - public.jnum(m.l->'t') < 600000 then 'undone'
-                       when m.tail and not m.young and (select count(*) from s where s.eff > m.eff) >= 400 then 'evicted'
+                       -- порог — один на всю запись: (новизна, место) 400-й устоявшейся
+                       when m.tail and not m.young and (m.eff, -m.ord) < (select eff, -ord from thr)
+                         then 'evicted'
                        when m.tail then 'back'
                        else 'gone'
                      end,
@@ -574,14 +622,20 @@ begin
         logged as (select id, sum(d) as d from moves where id is not null group by id),
         was as (select i->>'id' as id, i from jsonb_array_elements(public.jarr(prev->'items')) i
                  where i->>'id' is not null),
+        pbin as (select e, e->>'id' as eid, i as pos
+                   from jsonb_array_elements(public.jarr(prev->'trash')) with ordinality q(e, i)),
         binned as (   -- удалённые товары: вернувшийся из корзины приходит со своим остатком
-          select e->'item'->>'id' as id, e->'item' as i from jsonb_array_elements(public.jarr(prev->'trash')) e
+          select e->'item'->>'id' as id, e->'item' as i, e, pos from pbin
            where e->>'k' = 'item' and e->'item'->>'id' is not null
         ),
         cur as (select i->>'id' as id, i from jsonb_array_elements(public.jarr(new.data->'items')) i
                  where i->>'id' is not null),
-        newbin as (select e->'item'->>'id' as id from jsonb_array_elements(public.jarr(new.data->'trash')) e
+        newbin as (select e->'item'->>'id' as id, e->'item' as i from jsonb_array_elements(public.jarr(new.data->'trash')) e
                     where e->>'k' = 'item'),
+        mlim as (   -- что из прежней корзины склада осталось: всё, что раньше него, — обрезанный край
+          select min(pos) as minpos, min(public.jnum(e->'t')) as mint from pbin
+           where eid in (select z->>'id' from jsonb_array_elements(public.jarr(new.data->'trash')) z)
+        ),
         diff as (   -- было → стало у каждого товара, что есть или был на складе
           select coalesce(c.i->>'name', w.i->>'name', '') as name,
                  case when w.id is not null then public.jnum(w.i->'qty')
@@ -592,13 +646,23 @@ begin
            where c.id is not null or not exists (select 1 from newbin nb where nb.id = w.id)
           union all
           -- товар с остатком ушёл из корзины склада, но не вернулся на склад: иначе
-          -- «удалить товар» и следом «убрать из корзины» — остаток пропал бы молча
+          -- «удалить товар» и следом «убрать из корзины» — остаток пропал бы молча.
+          -- Кроме обрезанного по краю: программа держит в корзине 100 последних, и
+          -- самое старое уходит само — винить в этом продавца не за что
           select coalesce(b.i->>'name', ''), public.jnum(b.i->'qty'), 0,
                  coalesce((select g.d from logged g where g.id = b.id), 0)
-            from binned b
+            from binned b, mlim
            where not exists (select 1 from newbin nb where nb.id = b.id)
              and not exists (select 1 from cur c where c.id = b.id)
              and not exists (select 1 from was w where w.id = b.id)
+             and not (jsonb_array_length(public.jarr(new.data->'trash')) >= 100
+                      and (mlim.minpos is null or b.pos < mlim.minpos or public.jnum(b.e->'t') < mlim.mint))
+          union all
+          -- остаток поправили прямо в корзине: удалил товар с остатком 5, в корзине
+          -- сделал 0 и вернул — на складе 0, а в истории ничего
+          select coalesce(b.i->>'name', ''), public.jnum(b.i->'qty'), public.jnum(nb.i->'qty'), 0
+            from binned b join newbin nb on nb.id = b.id
+           where public.jnum(nb.i->'qty') <> public.jnum(b.i->'qty')
         )
         select count(*), string_agg(case when rn <= 3 then format('«%s» %s → %s', name, q0, q1) end, ', ')
           into other, odd
@@ -613,7 +677,7 @@ begin
 
     -- Ушедшее из истории — в архив: отменённое, вытесненное, стёртое хозяином.
     insert into public.docs_archive (t, doc, why, "by", uid, rec)
-      select nowms, 'main', case f->>'fate' when 'gone' then 'removed' else f->>'fate' end, who, me, f->'l'
+      select nowms, 'main', case f->>'fate' when 'gone' then 'removed' else f->>'fate' end, who, me, public.arch_rec(f->'l')
         from jsonb_array_elements(outs) f
        where f->>'fate' in ('undone', 'evicted', 'gone')
        order by (f->>'pos')::bigint;
@@ -740,6 +804,8 @@ revoke all on function public.trash_recs(jsonb)                 from public, ano
 revoke all on function public.rec_time(jsonb, numeric)          from public, anon, authenticated;
 revoke all on function public.stamp_rec(jsonb, jsonb, bigint, text) from public, anon, authenticated;
 revoke all on function public.log_effect(jsonb)                 from public, anon, authenticated;
+revoke all on function public.arch_rec(jsonb)                   from public, anon, authenticated;
+revoke all on function public.too_big(jsonb, jsonb)             from public, anon, authenticated;
 
 -- ---------- Живые обновления ----------
 -- Без этого изменения с другого телефона не приедут сами.

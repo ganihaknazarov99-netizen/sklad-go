@@ -406,7 +406,7 @@ test('продавец: долг, оплата частями, в корзину
   assert.deepEqual(await L.архив(), [], 'ничего не ушло — архив пуст');
 });
 
-test('полная корзина долгов: у продавца удаление проходит, старое база кладёт назад; хозяин вытесняет по-честному', { skip: нетPGlite && 'нет PGlite' }, async () => {
+test('полная корзина долгов: удаление проходит, обрезанное база кладёт назад — и у продавца, и у хозяина', { skip: нетPGlite && 'нет PGlite' }, async () => {
   const L = await лавка();
   const давно = Date.now() - 30 * ДЕНЬ;
   const корзина = Array.from({ length: 100 }, (_, k) => ({ id: 'x' + k, k: 'op', t: давно + k * МИН, by: 'Ганӣ', pn: 'Бахром',
@@ -420,16 +420,47 @@ test('полная корзина долгов: у продавца удален
   d = await L.док('debts');
   assert.equal(d.trash.length, 101, 'самая старая запись корзины вернулась: продавец ничего не вытесняет');
   assert.equal(d.trash[0].id, 'x0');
-  // хозяин удаляет долг — его программа обрезает до 100, и старое уходит по-честному
+  // хозяин удаляет долг — его программа обрезает до 100, база и у него кладёт обрезанное назад
   assert.equal(await L.попытка(ХОЗЯИН, 'debts', { ...d, ops: d.ops.filter((o) => o.id !== 'o2'),
     trash: d.trash.concat([{ id: 't2', k: 'op', t: Date.now(), by: 'Ганӣ', pn: 'Бахром', op: d.ops.find((o) => o.id === 'o2'), person: null }]).slice(-100) }), null);
   d = await L.док('debts');
-  assert.equal(d.trash.length, 100);
-  assert.deepEqual(d.trash.slice(0, 1).map((x) => x.id), ['x2'], 'вытеснены две самые старые');
-  assert.deepEqual((await L.лентаПосле(метка)).map((x) => x.txt), [], 'это не правка задним числом — строчки нет');
-  const а = await L.архив();
-  assert.deepEqual(а.map((x) => [x.doc, x.why, x.rec.id]), [['debts', 'evicted', 'ox0'], ['debts', 'evicted', 'ox1']], 'вытесненное — в архиве');
+  assert.equal(d.trash.length, 102, 'сама собой корзина долгов не теряет ничего');
+  assert.deepEqual(d.trash.slice(0, 2).map((x) => x.id), ['x0', 'x1']);
+  assert.equal(всеДолги(d).length, 102);
+  assert.deepEqual((await L.лентаПосле(метка)).map((x) => x.txt), [], 'строчек нет — ничего не стёрто');
+  assert.deepEqual(await L.архив(), []);
 });
+
+// Находка проверки безопасности: продавец кладёт долг D в корзину, потом подкладывает сто
+// записей корзины — копии долгов, что остаются в списке (с теми же номерами), или выдуманные
+// долги по 1 сомони. Обычное удаление у хозяина обрезало корзину до 100 — и D уходил молча.
+for (const [вид, подложить] of [
+  ['копии долгов из списка', (d) => d.ops.filter((o) => /^c/.test(o.id)).map((o, k) => ({ id: 'cc' + k, k: 'op', t: Date.now() + k, pn: 'Бахром', op: o, person: null }))],
+  ['выдуманные долги по 1 сомони', () => Array.from({ length: 100 }, (_, k) => ({ id: 'ff' + k, k: 'op', t: Date.now() + k, pn: 'Бахром', op: { id: 'fo' + k, pid: 'p1', type: 'give', amt: 1, t: Date.now() } }))],
+]) {
+  test('атака на программу хозяина: в корзину подложены ' + вид + ' — обрезая корзину, хозяин долг D не теряет', { skip: нетPGlite && 'нет PGlite' }, async () => {
+    const L = await лавка();
+    const вчера = Date.now() - ДЕНЬ;
+    const копии = Array.from({ length: 100 }, (_, k) => долг('c' + k, 1, вчера + k));
+    await L.посеять('debts', { people: [бахром], ops: [долг('D', 1000, вчера - ДЕНЬ), долг('o9', 5, вчера), ...копии], trash: [] });
+    let d = await L.док('debts');
+    // продавец: D — в корзину (это можно), затем подложить сто записей корзины
+    await L.писать(ПРОДАВЕЦ, 'debts', { ...d, ops: d.ops.filter((o) => o.id !== 'D'),
+      trash: [{ id: 'tD', k: 'op', t: Date.now(), by: 'Алишер', pn: 'Бахром', op: d.ops[0], person: null }] });
+    d = await L.док('debts');
+    assert.equal(await L.попытка(ПРОДАВЕЦ, 'debts', { ...d, trash: [...d.trash, ...подложить(d)] }), null);
+    // хозяин удаляет обычный долг: его программа держит в корзине 100 последних
+    d = await L.док('debts');
+    const метка = await L.меткаЛенты();
+    await L.писать(ХОЗЯИН, 'debts', { ...d, ops: d.ops.filter((o) => o.id !== 'o9'),
+      trash: d.trash.concat([{ id: 't9', k: 'op', t: Date.now(), by: 'Ганӣ', pn: 'Бахром', op: d.ops.find((o) => o.id === 'o9'), person: null }]).slice(-100) });
+    d = await L.док('debts');
+    assert.ok(d.trash.some((e) => e.id === 'tD'), 'запись корзины с долгом D на месте');
+    assert.equal(всеДолги(d).find((o) => o.id === 'D').amt, 1000);
+    assert.deepEqual((await L.лентаПосле(метка)).map((x) => x.txt), []);
+    assert.deepEqual(await L.архив(), [], 'и уходить в архив нечему');
+  });
+}
 
 test('программу хозяина не обмануть: пустые записи продавца в корзине долг не вытесняют', { skip: нетPGlite && 'нет PGlite' }, async () => {
   const L = await лавка();
@@ -527,4 +558,116 @@ test('схема при каждом запуске сервера: повтор
   // и старые записи дальше работают: продавец продаёт как обычно
   const m = await L.док('main');
   assert.equal(await L.попытка(ПРОДАВЕЦ, 'main', продать(m, 1).S), null);
+});
+
+// =====================================================================
+// Находки проверки безопасности к первой версии
+// =====================================================================
+test('атака: тысячи записей истории — отказ; пачки по 500 после 10 минут вытесняют друг друга, продажа снова быстрая', { skip: нетPGlite && 'нет PGlite' }, async () => {
+  const L = await лавка();
+  const давно = Date.now() - 10 * ДЕНЬ;
+  await L.посеять('main', склад(400, Array.from({ length: 400 }, (_, k) => запись(давно - k * МИН, 'in', 1, { by: 'Ганӣ' }))));
+  const мусор = (n, b) => Array.from({ length: n }, (_, k) => запись(Date.now() - b * 10000 - k, 'fix', 0, { note: 'мусор' }));
+  let m = await L.док('main');
+  assert.match(await L.попытка(ПРОДАВЕЦ, 'main', { ...m, log: [...мусор(501, 0), ...m.log] }), /bad_doc/, '501 новая запись за раз — отказ');
+  for (let b = 1; b <= 4; b++) {   // по 500 за раз — проходит; у каждой пачки своё время базы
+    m = await L.док('main');
+    assert.equal(await L.попытка(ПРОДАВЕЦ, 'main', { ...m, log: [...мусор(500, b), ...m.log] }), null);
+  }
+  await L.состарить('main', 'log', 11 * МИН);   // мусор устоялся: его уже не отменить
+  m = await L.док('main');
+  assert.equal(m.log.length, 2400);
+  // обычная продажа хозяина: его программа держит 400 — лишнее вытесняется, мусор тоже
+  let r = продать(m, 1); r.S.log[0].by = 'Ганӣ';
+  assert.equal(await L.попытка(ХОЗЯИН, 'main', r.S), null);
+  m = await L.док('main');
+  assert.equal(m.log.length, 401, '400 устоявшихся (и записи одной пачки вытесняют друг друга) плюс свежая');
+  assert.equal((await L.архив()).filter((x) => x.why === 'evicted').length, 2400 + 1 - 401, 'вытесненное — в архиве');
+  // следующая продажа — как обычно
+  r = продать(m, 1); r.S.log[0].by = 'Ганӣ';
+  const t0 = Date.now();
+  await L.писать(ХОЗЯИН, 'main', r.S);
+  const мс = Date.now() - t0;
+  assert.ok(мс < 3000, 'продажа после атаки: ' + мс + ' мс');
+});
+
+test('атака: огромная заметка — отказ; архив не забить по кругу «внёс — отменил»', { skip: нетPGlite && 'нет PGlite' }, async () => {
+  const L = await лавка();
+  await L.посеять('main', склад(50));
+  let m = await L.док('main');
+  const сЗаметкой = (S, note) => { const r = продать(S, 1); r.S.log[0].note = note; return r; };
+  assert.match(await L.попытка(ПРОДАВЕЦ, 'main', сЗаметкой(m, 'я'.repeat(3000)).S), /bad_doc/, 'новая запись длиннее 2000 знаков — отказ');
+  assert.match(await L.попытка(ПРОДАВЕЦ, 'main', сЗаметкой(m, 'я'.repeat(200000)).S), /bad_doc/);
+  assert.equal(await L.попытка(ПРОДАВЕЦ, 'main', сЗаметкой(m, 'в долг: Бахром').S), null, 'обычная заметка — как всегда');
+  m = await L.док('main');
+  assert.match(await L.попытка(ПРОДАВЕЦ, 'main', { ...m, log: [{ ...m.log[0], note: 'я'.repeat(3000) }] }), /bad_doc/, 'и прежней записи заметку не раздуть');
+  // внёс — отменил, по кругу: в архив каждый раз — не больше 2000 знаков
+  for (let k = 0; k < 3; k++) {
+    m = await L.док('main');
+    const r = сЗаметкой(m, 'ы'.repeat(1700));
+    await L.писать(ПРОДАВЕЦ, 'main', r.S);
+    m = await L.док('main');
+    await L.писать(ПРОДАВЕЦ, 'main', { ...m, items: [товар(m.items[0].qty + 1)], log: m.log.filter((l) => l.t !== r.l.t) });
+  }
+  const а = await L.pg.query("select length(rec::text) as n from public.docs_archive where why = 'undone'");
+  assert.equal(а.rows.length, 3);
+  assert.ok(а.rows.every((x) => x.n <= 2000), JSON.stringify(а.rows));
+  // хозяину можно и длинное, но в архив уходит обрезанное
+  m = await L.док('main');
+  const r = сЗаметкой(m, 'ж'.repeat(50000)); r.S.log[0].by = 'Ганӣ';
+  await L.писать(ХОЗЯИН, 'main', r.S);
+  m = await L.док('main');
+  await L.писать(ХОЗЯИН, 'main', { ...m, items: [товар(m.items[0].qty + 1)], log: m.log.filter((l) => l.t !== r.l.t) });
+  const х = (await L.pg.query('select rec, length(rec::text) as n from public.docs_archive order by id desc limit 1')).rows[0];
+  assert.equal(х.rec.cut, true);
+  assert.ok(х.n < 2100);
+  // долги: новый долг, правка заметки старого, запись корзины — тоже не длиннее 2000
+  await L.посеять('debts', { people: [бахром], ops: [долг('o1', 10, Date.now() - ДЕНЬ)], trash: [] });
+  const d = await L.док('debts');
+  assert.match(await L.попытка(ПРОДАВЕЦ, 'debts', { ...d, ops: [...d.ops, долг('o2', 5, Date.now(), { note: 'я'.repeat(3000) })] }), /bad_doc/);
+  assert.match(await L.попытка(ПРОДАВЕЦ, 'debts', { ...d, ops: [{ ...d.ops[0], note: 'я'.repeat(3000) }] }), /bad_doc/);
+  assert.match(await L.попытка(ПРОДАВЕЦ, 'debts', { ...d, ops: [], trash: [{ id: 't', k: 'op', t: Date.now(), pn: 'я'.repeat(3000), op: d.ops[0] }] }), /bad_doc/);
+  assert.equal(await L.попытка(ПРОДАВЕЦ, 'debts', { ...d, ops: [{ ...d.ops[0], note: 'вернёт в пятницу' }] }), null);
+  // больше 500 новых долгов за раз — отказ
+  const d2 = await L.док('debts');
+  const много = Array.from({ length: 501 }, (_, k) => долг('m' + k, 1, Date.now()));
+  assert.match(await L.попытка(ПРОДАВЕЦ, 'debts', { ...d2, ops: [...d2.ops, ...много] }), /bad_doc/);
+  assert.equal(await L.попытка(ПРОДАВЕЦ, 'debts', { ...d2, ops: [...d2.ops, ...много.slice(0, 500)] }), null, '500 — можно');
+});
+
+test('атака: остаток поправлен прямо в корзине склада (5 → 0), товар возвращён — строчка в ленте', { skip: нетPGlite && 'нет PGlite' }, async () => {
+  const L = await лавка();
+  await L.посеять('main', склад(5));
+  let m = await L.док('main');
+  const метка = await L.меткаЛенты();
+  await L.писать(ПРОДАВЕЦ, 'main', { ...m, items: [], trash: [{ id: 'ti', k: 'item', t: Date.now(), by: 'Алишер', item: m.items[0] }] });
+  assert.deepEqual(await L.лентаПосле(метка), [], 'удалить в корзину — не строчка');
+  m = await L.док('main');
+  await L.писать(ПРОДАВЕЦ, 'main', { ...m, trash: [{ ...m.trash[0], item: { ...m.trash[0].item, qty: 0 } }] });
+  m = await L.док('main');
+  await L.писать(ПРОДАВЕЦ, 'main', { ...m, items: [m.trash[0].item], trash: [] });
+  m = await L.док('main');
+  assert.equal(m.items[0].qty, 0);
+  const л = await L.лентаПосле(метка);
+  assert.ok(л.some((x) => x.by === 'Алишер' && /«Куртка» 5 → 0/.test(x.txt)), JSON.stringify(л));
+});
+
+test('полная корзина склада: программа сама обрезает старый удалённый товар с остатком — строчки нет; из середины — есть', { skip: нетPGlite && 'нет PGlite' }, async () => {
+  const L = await лавка();
+  const давно = Date.now() - 30 * ДЕНЬ;
+  const корзина = () => Array.from({ length: 100 }, (_, k) => ({ id: 'x' + k, k: 'item', t: давно + k, by: 'Ганӣ',
+    item: { id: 'y' + k, name: k === 0 ? 'Старый' : 'Пустой ' + k, qty: k === 0 ? 3 : 0 } }));
+  await L.посеять('main', { ...склад(2), trash: корзина() });
+  let m = await L.док('main');
+  let метка = await L.меткаЛенты();
+  // delItems(): товар — в корзину, корзина держит 100 последних
+  await L.писать(ПРОДАВЕЦ, 'main', { ...m, items: [],
+    trash: m.trash.concat([{ id: 'ti', k: 'item', t: Date.now(), by: 'Алишер', item: m.items[0] }]).slice(-100) });
+  assert.deepEqual((await L.лентаПосле(метка)).map((x) => x.txt), [], 'обрезанное по краю — не вина продавца');
+  // а убрать «Старый» с остатком из середины корзины — строчка
+  await L.посеять('main', { ...склад(2), trash: [{ id: 'z', k: 'item', t: давно - 1, item: { id: 'z1', name: 'Пустой', qty: 0 } }, ...корзина().slice(0, 50)] });
+  m = await L.док('main');
+  метка = await L.меткаЛенты();
+  await L.писать(ПРОДАВЕЦ, 'main', { ...m, trash: m.trash.filter((e) => e.id !== 'x0') });
+  assert.ok((await L.лентаПосле(метка)).some((x) => /«Старый» 3 → 0/.test(x.txt)));
 });
