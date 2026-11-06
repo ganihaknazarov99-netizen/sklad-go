@@ -40,6 +40,8 @@
     if (/version_conflict/i.test(m)) return { code: 'version_conflict', message: m };
     var отказ = /\b(debt_changed|debt_vanished|log_vanished)\b/.exec(m);
     if (отказ) return { code: отказ[1], message: ОТКАЗЫ[отказ[1]] };
+    // Свой сервер: вход закрыт (сменили пароль, «выйти везде» на другом телефоне) — 401
+    if (e && (e.status === 401 || e.code === 'not authenticated')) return { code: 'auth', message: m };
     if (!navigator.onLine || /fetch|network|timeout|connection|ECONN/i.test(m)) return { code: 'network', message: m };
     return { code: (e && e.code) || 'error', message: m };
   }
@@ -134,7 +136,7 @@
     collection: collection
   };
 
-  var session = null;
+  var session = null, lostP = null;
   var api = {
     db: function () { return Promise.resolve(sb && session ? db : null); },
     user: function () {
@@ -180,6 +182,20 @@
           if (session) session.user.has_password = true;
         });
       } : undefined,
+      /* Сервер ответил «нужно войти»: вход закрыли с другого устройства, а здесь есть
+         неотправленное. Данные телефона не стираем — показываем вход. Войдёт тот же человек —
+         программа дошлёт изменения сама (другой аккаунт, как и раньше, сотрёт их при входе).
+         Вход на самом деле жив или нет связи проверить — false: программа просто повторит */
+      lost: function () {
+        if (lostP) return lostP;
+        lostP = sb.auth.getSession().then(function (r) {
+          if ((r && r.data && r.data.session) || noNet(r)) { lostP = null; return false; }
+          session = null;
+          loginScreen('Вход закрыт на другом устройстве. Войдите снова тем же аккаунтом — несохранённое на этом телефоне отправится само');
+          return true;
+        }, function () { lostP = null; return false; });
+        return lostP;
+      },
       hasPassword: function () { return !!(session && session.user.has_password); },
       hasTotp: function () { return !!(session && session.user.has_totp); },
       totpStart: sb.auth.totpStart ? function (pass) {

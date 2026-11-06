@@ -72,11 +72,53 @@
     B = B || {};
     var o = {};
     o.people = mergeList(B.people, L.people, R.people, byId);
-    o.ops = mergeList(B.ops, L.ops, R.ops, byId).sort(function (a, b) { return (a.at || a.t || 0) - (b.at || b.t || 0); });
+    o.ops = mergeList(B.ops, L.ops, R.ops, byId);
     o.trash = mergeList(B.trash, L.trash, R.trash, byId).sort(function (a, b) { return a.t - b.t; }).slice(-100);
+    trashWins(B, L, R, o);
+    o.ops.sort(function (a, b) { return (a.at || a.t || 0) - (b.at || b.t || 0); });
     return o;
   }
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
+
+  /* Долг не бывает сразу и в списке, и в корзине. А выходило так: на одном телефоне запись
+     удалили в корзину, на другом в это время поправили её заметку — правка возвращала запись
+     в список, и удалённый долг снова считался в итоге. Удаление в корзину побеждает правку,
+     но правка не теряется: она переходит в запись внутри корзины (вернут из корзины — с ней).
+     Так же с человеком: удалён — остаётся удалённым, если за ним не осталось долгов в списке.
+     А если остались (на другом телефоне ему в это время записали новый долг) — человек
+     возвращается, иначе новый долг ни на экране, ни в итоге не виден. */
+  function trashWins(B, L, R, o) {
+    var live = idx(o.ops, byId), bOps = idx(B.ops, byId), drop = {};
+    var withEdit = function (inTrash, b) {
+      var cur = live[inTrash.id];
+      if (eq(cur, inTrash)) return inTrash;
+      return b ? mergeFields(b, inTrash, cur) : cur;
+    };
+    var opInTrash = function (op) {
+      if (!op || !live[op.id]) return op;
+      drop[op.id] = 1;
+      return withEdit(op, bOps[op.id]);
+    };
+    o.trash = o.trash.map(function (e) {
+      if (!e) return e;
+      if (e.k === 'op' && e.op && live[e.op.id]) { e = copy(e); e.op = opInTrash(e.op); }
+      if (e.k === 'person' && (e.ops || []).some(function (x) { return x && live[x.id]; })) { e = copy(e); e.ops = e.ops.map(opInTrash); }
+      return e;
+    });
+    o.ops = o.ops.filter(function (x) { return !(x && drop[x.id]); });
+
+    var used = {}, have = {}, gone = {};
+    o.ops.forEach(function (x) { if (x) used[x.pid] = 1; });
+    o.trash.forEach(function (e) { if (e && e.person && e.person.id) gone[e.person.id] = 1; });
+    o.people = o.people.filter(function (p) { return !(p && gone[p.id] && !used[p.id]); });
+    o.people.forEach(function (p) { if (p) have[p.id] = 1; });
+    // Вернуть человека, за которым в списке остались долги: как он записан на сервере, у нас или в корзине
+    var known = idx([].concat(R.people || [], L.people || [], B.people || [],
+      o.trash.map(function (e) { return e && e.person; })).filter(Boolean), byId);
+    Object.keys(used).forEach(function (pid) {
+      if (!have[pid] && known[pid]) { o.people.push(copy(known[pid])); have[pid] = 1; }
+    });
+  }
 
   /* Сервер не принял правку записанного долга (debt_changed / debt_vanished).
      Слияние тут не поможет: оно сохранит нашу же правку, и сервер откажет снова.
