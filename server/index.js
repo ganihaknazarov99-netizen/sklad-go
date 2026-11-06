@@ -4,8 +4,9 @@
      DATABASE_URL          — ${{Postgres.DATABASE_URL}}, база Railway
      PUBLIC_URL            — основной адрес склада: https://skladgo.vercel.app (на него вернёт
                              Google, если страница не сказала свой адрес — старая копия программы)
-     EXTRA_ORIGINS         — другие адреса склада через запятую: https://skladgo.com,https://www.skladgo.com
-                             и адрес для проверки правок. Каждый из них нужен и в Google
+     EXTRA_ORIGINS         — другие адреса склада через запятую (адрес для проверки правок).
+                             Свой адрес магазина skladgo.com вписан ниже (АДРЕСА) и есть всегда.
+                             Каждый адрес нужен и в Google
                              (Credentials → Authorized redirect URIs: <адрес>/auth/callback)
      GOOGLE_CLIENT_ID      — из Google Cloud → APIs & Services → Credentials
      GOOGLE_CLIENT_SECRET  — оттуда же. Вписывает только хозяин, в код не попадает
@@ -15,6 +16,10 @@ const { createPg } = require('./db-pg');
 const { migrate } = require('./migrate');
 const { createApp } = require('./app');
 
+// Свой адрес магазина (куплен 4 ноября 2026). С него можно входить и писать всегда,
+// даже если в Railway → Variables его не вписали
+const АДРЕСА = ['https://skladgo.com', 'https://www.skladgo.com'];
+
 (async () => {
   const env = process.env;
   const db = createPg(env.DATABASE_URL);
@@ -22,7 +27,7 @@ const { createApp } = require('./app');
   const app = createApp({
     db,
     publicUrl: env.PUBLIC_URL,
-    origins: String(env.EXTRA_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
+    origins: АДРЕСА.concat(String(env.EXTRA_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)),
     googleId: env.GOOGLE_CLIENT_ID,
     googleSecret: env.GOOGLE_CLIENT_SECRET,
     fetch,
