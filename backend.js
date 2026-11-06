@@ -20,7 +20,8 @@
   var cfg = root.SKLAD_CONFIG || {};
   // Свой сервер на Railway ({ api: '/api' }, backend-server.js) говорит так же, как Supabase,
   // поэтому дальше всё одинаково. Не загрузился его файл — это не демо, а «нет связи»
-  var configured = !!cfg.api || !!(cfg.url && cfg.anonKey && String(cfg.url).indexOf('http') === 0);
+  // Библиотека Supabase больше не грузится со страницы: адрес с url+ключом без неё — это демо, а не падение
+  var configured = !!cfg.api || !!(cfg.url && cfg.anonKey && String(cfg.url).indexOf('http') === 0 && root.supabase);
   var sb = cfg.api ? (root.skladServerClient ? root.skladServerClient(cfg.api) : null)
     : (configured && root.supabase)
       ? root.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })

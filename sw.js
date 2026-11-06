@@ -4,17 +4,15 @@
    изменения программы приезжают к продавцам сразу, а не через раз. Без интернета
    (или если сеть не ответила за несколько секунд) — отдаём то, что сохранили.
 
-   Данные склада сюда не попадают: запросы к серверу (Supabase или свой, /api) идут мимо. Склад
+   Данные склада сюда не попадают: запросы к серверу (/api) идут мимо. Склад
    и долги программа и так держит в памяти телефона и досылает, когда появится связь. */
-const V = 'skladgo-v7';   // номер меняем, только если меняется список ниже
+const V = 'skladgo-v8';   // номер меняем, только если меняется список ниже
 const SHELL = ['/', '/index.html', '/theme.js', '/tg.js', '/i18n.js', '/merge.js', '/barcode.js', '/scan.js', '/config.js', '/backend-server.js', '/customer.js', '/backend.js', '/demo.js', '/mock.js', '/qr.js', '/app.js',
   '/logo.svg', '/privacy.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
-// Supabase грузится с чужой раздачи. Версия в адресе зафиксирована, поэтому файл не меняется — берём из копии сразу
-const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
 const WAIT = 4000;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(V).then((c) => c.addAll(SHELL.concat(new Request(LIB, { mode: 'cors' })))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(V).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== V).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -24,11 +22,7 @@ self.addEventListener('fetch', (e) => {
   const r = e.request;
   if (r.method !== 'GET') return;
   const u = new URL(r.url);
-  if (u.href === LIB) {
-    e.respondWith(caches.match(LIB).then((hit) => hit || fetch(r).then((res) => { if (res.ok) caches.open(V).then((c) => c.put(LIB, res.clone())); return res; })));
-    return;
-  }
-  if (u.origin !== location.origin) return;           // Supabase и всё чужое — мимо копии
+  if (u.origin !== location.origin) return;           // всё чужое — мимо копии
   if (/^\/(api|auth)\//.test(u.pathname)) return;    // свой сервер (Railway): данные и вход — тоже мимо
   e.respondWith(fresh(r));
 });
