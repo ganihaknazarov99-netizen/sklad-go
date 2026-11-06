@@ -16,20 +16,19 @@ const root = path.join(__dirname, '..', '..');
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 const plain = (x) => JSON.parse(JSON.stringify(x));
 
+// хранилище как в браузере: ключи — свои поля (Object.keys видит их), методы не перечисляются
 function хранилище(start) {
-  const store = { ...(start || {}) };
-  return {
-    store,
-    localStorage: {
-      getItem: (k) => (k in store ? store[k] : null),
-      setItem: (k, v) => { store[k] = String(v); },
-      removeItem: (k) => { delete store[k]; },
-    },
-  };
+  const store = Object.assign({}, start || {});
+  Object.defineProperties(store, {
+    getItem: { value: (k) => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null) },
+    setItem: { value: (k, v) => { store[k] = String(v); } },
+    removeItem: { value: (k) => { delete store[k]; } },
+  });
+  return { store, localStorage: store };
 }
-function мок() {
-  const { store, localStorage } = хранилище();
-  const ctx = { localStorage, crypto: globalThis.crypto, TextEncoder, Promise, JSON, Object, Date, Math, Uint8Array };
+function мок(cfg, start) {
+  const { store, localStorage } = хранилище(start);
+  const ctx = { localStorage, crypto: globalThis.crypto, TextEncoder, Promise, JSON, Object, Date, Math, Uint8Array, SKLAD_CONFIG: cfg };
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(read('customer.js'), ctx);   // остаток и сроки считает экран покупателя
@@ -118,7 +117,8 @@ test('тестовый режим включается только ?mock и н�
   const off = конфиг('127.0.0.1', '?mock=off', { 'skladgo.mockmode': '1' });
   assert.deepEqual(off.cfg, { url: '', anonKey: '' }, '?mock=off — обратно демо');
   assert.equal(off.store['skladgo.mockmode'], undefined);
-  assert.deepEqual(конфиг('sklad-go-gani26.vercel.app', '?mocking').cfg, { url: '', anonKey: '' }, 'похожее слово не включает');
+  assert.deepEqual(конфиг('sklad-go-abc123-gani26.vercel.app', '?mocking').cfg, { url: '', anonKey: '' }, 'похожее слово не включает');
+  assert.deepEqual(конфиг('sklad-go-gani26.vercel.app', '').cfg, { mock: true, own: true }, 'ссылка для друзей — сразу регистрация и свой склад, без демо');
 });
 
 test('в тестовом режиме склад запускается только после входа владельца', async () => {
@@ -142,4 +142,26 @@ test('в тестовом режиме склад запускается тол�
   assert.equal(запусков, 1);
   assert.deepEqual(plain(ctx.staff).map((s) => s.name), ['Гани'], 'в команде — владелец, который вошёл');
   assert.match(read('backend.js'), /if \(cfg\.mock\) \{\s*loadJS\('mock\.js'\)/);
+});
+
+test('свой склад (ссылка для друзей): склад один на телефон, без показательных товаров', async () => {
+  const { M, store } = мок({ mock: true, own: true });
+  await M.signUp({ role: 'owner', name: 'Ибра', email: 'ibra@test.tj', password: 'parol-123' });
+  await assert.rejects(M.signUp({ role: 'owner', name: 'Ещё', email: 'x@test.tj', password: 'parol-123' }), /На этом телефоне уже есть склад/);
+  // на телефоне остались показательные товары прежней витрины — убираем, язык и аккаунт оставляем
+  Object.assign(store, { 'skladgo.v1': '{"items":[{"name":"Куртка"}]}', 'skladgo.debts': '{"people":[]}', 'skladgo.demo.v1': '1', 'skladgo.lang': 'tg' });
+  M.ownPrep('Магазин Ибры');
+  assert.equal(store['skladgo.own'], '1');
+  assert.equal(store['skladgo.debts'], undefined, 'чужие показательные долги убраны');
+  assert.deepEqual(JSON.parse(store['skladgo.v1']).items, [], 'склад пустой');
+  assert.equal(JSON.parse(store['skladgo.v1']).biz, 'Магазин Ибры');
+  assert.equal(store['skladgo.lang'], 'tg');
+  assert.ok(store['skladgo.mock.accounts'], 'аккаунт на месте');
+});
+
+test('свой склад: кто уже вёл склад на этом телефоне, его товары не пропадают', () => {
+  const { M, store } = мок({ mock: true, own: true }, { 'skladgo.own': '1', 'skladgo.demo.v1': '1', 'skladgo.v1': '{"items":[{"name":"Шапка"}],"biz":"Старое"}' });
+  M.ownPrep('Новое название');
+  assert.deepEqual(JSON.parse(store['skladgo.v1']).items, [{ name: 'Шапка' }]);
+  assert.equal(JSON.parse(store['skladgo.v1']).biz, 'Старое', 'своё название не перетираем');
 });
