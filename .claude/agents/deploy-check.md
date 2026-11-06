@@ -11,13 +11,13 @@ model: haiku
 
 | Адрес | Что это |
 |---|---|
-| `https://skladgo.vercel.app` | главный, его рассылают людям |
-| `https://sklad-go-gani26.vercel.app` | тот же проект на Vercel |
-| `https://sklad-go-backend.vercel.app` | он же, старое имя |
-| `https://ganihaknazarov99-netizen.github.io/sklad-go/` | GitHub Pages |
+| `https://skladgo.com` | **магазин**, свой адрес — его рассылают людям |
+| `https://skladgo.vercel.app` | тот же магазин, прежний адрес |
+| `https://sklad-go-gani26.vercel.app` | ссылка для друзей: регистрация и свой склад в телефоне |
+| `https://sklad-go-production.up.railway.app/health` | сервер магазина на Railway → `ok` |
 
-Все четыре показывают **показательную (демо) версию** — корень склада. Полная версия
-в интернете не стоит нигде: ей нужен сервер, которого пока нет.
+Магазин (первые два адреса) — файлы из корня на Vercel плюс сервер `server/` на
+Railway: `config.js` для них даёт `{ api: '/api' }`, а `/api/me` без входа отвечает 401.
 
 ## Порядок
 

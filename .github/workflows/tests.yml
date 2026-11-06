@@ -1,0 +1,32 @@
+# Тесты на каждый pull request и на каждое слияние в main.
+# Слияние в main сразу выкладывает магазин (Vercel + Railway), поэтому красная
+# галочка здесь — знак «не сливать». Агенты и хозяин смотрят на неё перед «merge».
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # сервер (pg) — корень; PGlite (Postgres для тестов) — supabase/
+      - run: npm ci
+      - run: npm ci
+        working-directory: supabase
+      - run: npm test
+        working-directory: backend

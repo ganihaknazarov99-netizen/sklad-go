@@ -1,0 +1,37 @@
+# Сторож магазина: каждые 15 минут проверяет, что skladgo.com открывается и сервер
+# на Railway отвечает. Упала проверка — GitHub пришлёт письмо владельцу склада
+# (Settings → Notifications → Actions: «Send notifications for failed workflows only»).
+# Только чтение: ни входа, ни записи в магазин.
+name: Uptime
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Магазин и сервер отвечают
+        run: |
+          fail=0
+          check() {   # что проверяем, адрес, ожидаемый код, необязательная строка в ответе
+            for try in 1 2 3; do
+              body=$(curl -s -o /tmp/b -w '%{http_code}' --max-time 20 "$2" || echo 000)
+              if [ "$body" = "$3" ] && { [ -z "$4" ] || grep -q "$4" /tmp/b; }; then
+                echo "ok    $1 ($2 → $body)"; return 0
+              fi
+              sleep 20
+            done
+            echo "::error title=$1::$2 ответил $body, ждали $3${4:+ и «$4»}"; fail=1
+          }
+          check "Сайт магазина"         https://skladgo.com/                                200 'Sklad Go'
+          check "Прежний адрес"         https://skladgo.vercel.app/                         200 'Sklad Go'
+          check "Склад — на сервере"    https://skladgo.com/config.js                       200 "'skladgo.com': { api: '/api' }"
+          check "Сервер через сайт"     https://skladgo.com/api/me                          401
+          check "Сервер на Railway"     https://sklad-go-production.up.railway.app/health   200 ok
+          exit $fail

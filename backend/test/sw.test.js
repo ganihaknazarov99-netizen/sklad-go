@@ -11,7 +11,6 @@ const vm = require('node:vm');
 
 const src = fs.readFileSync(path.join(__dirname, '..', '..', 'sw.js'), 'utf8');
 const ORIGIN = 'https://skladgo.vercel.app';
-const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
 
 function песочница({ сеть, копия = {} }) {
   const положено = {};
@@ -88,13 +87,4 @@ test('запросы к Supabase и прочие чужие идут мимо к
   assert.equal(перехвачено, false);
   слушатели.fetch({ request: { ...запрос('/app.js'), method: 'POST' }, respondWith: () => { перехвачено = true; } });
   assert.equal(перехвачено, false, 'запись не перехватываем');
-});
-
-test('библиотека Supabase — из копии сразу, даже при живой сети', async () => {
-  let вСеть = 0;
-  const { слушатели } = песочница({ сеть: () => { вСеть++; return Promise.resolve(ответ('из сети')); }, копия: { [LIB]: ответ('supabase-js из копии') } });
-  let отдано;
-  слушатели.fetch({ request: запрос(LIB), respondWith: (p) => { отдано = p; } });
-  assert.equal(await текст(await отдано), 'supabase-js из копии');
-  assert.equal(вСеть, 0, 'версия в адресе зафиксирована — файл не меняется, в сеть не ходим');
 });
