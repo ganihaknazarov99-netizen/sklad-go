@@ -36,7 +36,11 @@ function createApp(o) {
   const db = o.db;
   const pub = new URL(o.publicUrl || 'http://localhost:8080');
   const свои = new Set([pub.origin].concat(o.origins || []));
-  const назад = pub.origin + '/auth/callback';
+  // Склад открывают с нескольких адресов (skladgo.com и прежний skladgo.vercel.app). После
+  // Google человек должен вернуться туда, откуда пришёл: cookie входа у каждого адреса своя.
+  // Страница говорит свой адрес сама (from) — берём его, только если он из нашего списка
+  const откуда = (a) => (свои.has(a) ? a : pub.origin);
+  const назад = (a) => откуда(a) + '/auth/callback';
   const сейчас = o.now || Date.now;
   const log = o.log || ((...a) => console.error(...a));
   const слушатели = new Set();
@@ -145,9 +149,11 @@ function createApp(o) {
     if (!o.googleId || !o.googleSecret) return redirect(res, '/?error=server_error');
     const state = rnd(24), verifier = rnd(48);
     const to = Buffer.from(путь(u.searchParams.get('to'))).toString('base64url');
-    cookie(res, 'sg_o', state + '.' + verifier + '.' + to, 600, '/auth');
+    const from = откуда(u.searchParams.get('from'));
+    // адрес возврата запоминаем: обмен кода у Google должен назвать тот же самый
+    cookie(res, 'sg_o', state + '.' + verifier + '.' + to + '.' + Buffer.from(from).toString('base64url'), 600, '/auth');
     const q = new URLSearchParams({
-      client_id: o.googleId, redirect_uri: назад, response_type: 'code', scope: 'openid email profile', state,
+      client_id: o.googleId, redirect_uri: назад(from), response_type: 'code', scope: 'openid email profile', state,
       // каждый раз список аккаунтов: иначе Google молча входит в последний и другим Gmail не войти
       prompt: 'select_account',
       code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
@@ -195,10 +201,11 @@ function createApp(o) {
   }
 
   async function callback(req, res, u) {
-    const [state, verifier, to64] = String(cookies(req).sg_o || '').split('.');
+    const [state, verifier, to64, from64] = String(cookies(req).sg_o || '').split('.');
     cookie(res, 'sg_o', '', 0, '/auth');
-    let to = '/';
+    let to = '/', from = '';
     try { to = путь(Buffer.from(to64 || '', 'base64url').toString('utf8')); } catch (e) {}
+    try { from = Buffer.from(from64 || '', 'base64url').toString('utf8'); } catch (e) {}
     if (u.searchParams.get('error')) return redirect(res, '/?error=access_denied');
     if (!state || u.searchParams.get('state') !== state || !u.searchParams.get('code')) return redirect(res, '/?error=bad_state');
     let p;
@@ -208,7 +215,7 @@ function createApp(o) {
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           code: u.searchParams.get('code'), client_id: o.googleId, client_secret: o.googleSecret,
-          redirect_uri: назад, grant_type: 'authorization_code', code_verifier: verifier,
+          redirect_uri: назад(from), grant_type: 'authorization_code', code_verifier: verifier,
         }).toString(),
       });
       const t = await r.json().catch(() => ({}));

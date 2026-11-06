@@ -2,7 +2,11 @@
 /* Запуск сервера Sklad Go на Railway: npm start.
    Настройки (Railway → сервис sklad-go → Variables):
      DATABASE_URL          — ${{Postgres.DATABASE_URL}}, база Railway
-     PUBLIC_URL            — адрес склада, где его открывают люди: https://skladgo.vercel.app
+     PUBLIC_URL            — основной адрес склада: https://skladgo.vercel.app (на него вернёт
+                             Google, если страница не сказала свой адрес — старая копия программы)
+     EXTRA_ORIGINS         — другие адреса склада через запятую: https://skladgo.com,https://www.skladgo.com
+                             и адрес для проверки правок. Каждый из них нужен и в Google
+                             (Credentials → Authorized redirect URIs: <адрес>/auth/callback)
      GOOGLE_CLIENT_ID      — из Google Cloud → APIs & Services → Credentials
      GOOGLE_CLIENT_SECRET  — оттуда же. Вписывает только хозяин, в код не попадает
    PORT Railway задаёт сам. */
