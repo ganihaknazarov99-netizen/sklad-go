@@ -129,7 +129,7 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function find(id){return S.items.filter(function(i){return i.id===id})[0]}
 function meta(i){return [i.cat,i.size,i.color].filter(Boolean).map(esc).join(' · ')}
 function lab(i){return i.name+(i.size?' · '+i.size:'')+(i.color?' · '+i.color:'')}
-function money(n){var r=Math.round((+n||0)*100)/100;return r.toLocaleString('ru-RU',{maximumFractionDigits:2})+' сом'}
+function money(n){var r=Math.round((+n||0)*100)/100||0;return r.toLocaleString('ru-RU',{maximumFractionDigits:2})+' сом'}
 function dkey(t){return new Date(t).toLocaleDateString('ru-RU')}
 function buzz(){try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}}
 

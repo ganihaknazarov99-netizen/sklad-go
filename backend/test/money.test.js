@@ -80,7 +80,7 @@ const moneyRaw = new Function(mm[0] + ' return money;')();
 // поэтому сравниваем, приведя любые пробелы к обычному.
 const money = (n) => moneyRaw(n).replace(/\s/g, ' ');
 
-test('сошедшийся баланс печатается без минуса', { todo: 'bug: app.js:132 money(-5.7e-14) даёт «-0 сом» (Math.round даёт -0, toLocaleString печатает минус)' }, () => {
+test('сошедшийся баланс печатается без минуса', () => {
   assert.equal(money(85.10 + 220.20 - 305.30), '0 сом');
 });
 
