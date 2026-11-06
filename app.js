@@ -20,6 +20,14 @@ function setVD(v){verDebts=v;LSS('skladgo.ver.debts',String(v))}
 function anyDirty(){return dirtyMain||dirtyDebts}
 function isNet(e){return !!e&&e.code==='network'}
 function scheduleRetry(){clearTimeout(retryT);retryT=setTimeout(function(){if(dirtyMain)doPush(0);if(dirtyDebts)ddoPush(0)},15000)}
+/* Отправка не прошла. Вход закрыли с другого устройства (сменили пароль, «выйти везде») —
+   сервер отвечает «нужно войти», и повторять каждые 15 секунд бесполезно: показываем вход.
+   Неотправленное остаётся на телефоне и уйдёт, когда войдёт тот же человек. Вход на самом
+   деле жив (или нет связи проверить) — повторяем, как при любой ошибке */
+function sendFail(e){
+  if(e&&e.code==='auth'&&window.skladAuth&&skladAuth.lost){setSy('err');skladAuth.lost().then(function(gone){if(!gone)scheduleRetry()},scheduleRetry);return}
+  setSy(isNet(e)?'off':'err');scheduleRetry();
+}
 function mainPayload(){return{items:S.items,log:S.log,cats:S.cats,trash:S.trash||[],biz:S.biz||''}}
 function cleanMain(d){return{items:d.items||[],log:d.log||[],cats:d.cats&&d.cats.length?d.cats:S.cats,trash:d.trash||[],biz:d.biz||''}}
 function save(){pend=null;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}revMain++;dirtyMain=true;LSS('skladgo.dirty.main','1');push()}
@@ -29,7 +37,7 @@ function push(){
 }
 function doPush(n,pre){
   if(!dbd)return;
-  if(verMain==null&&!pre){setSy('wait');dbd.get().then(function(sn){if(sn.exists)mergeMainIn(sn.data(),sn.version);doPush(n,true)},function(e){setSy(isNet(e)?'off':'err');scheduleRetry()});return}
+  if(verMain==null&&!pre){setSy('wait');dbd.get().then(function(sn){if(sn.exists)mergeMainIn(sn.data(),sn.version);doPush(n,true)},sendFail);return}
   mine=Date.now();setSy('wait');
   var my=revMain,sent=clone(mainPayload()),pl=clone(sent);pl.u=mine;
   dbd.set(pl,{ifMatch:verMain}).then(function(r){
@@ -50,7 +58,7 @@ function doPush(n,pre){
     }
     if(e&&e.code==='version_conflict'&&n<4){
       dbd.get().then(function(sn){if(sn.exists)mergeMainIn(sn.data(),sn.version);doPush(n+1)},function(){setSy('off');scheduleRetry()});
-    }else{setSy(isNet(e)?'off':'err');scheduleRetry()}
+    }else sendFail(e);
   });
 }
 function mergeMainIn(R,v){
@@ -116,7 +124,10 @@ function remote(d,v){
     dbd.onSnapshot(function(s){
       if(!s.exists){if(S.items.length){dirtyMain=true;LSS('skladgo.dirty.main','1');push()}else if(!$('ov').innerHTML)render();return}
       var d=s.data();if(!d)return;var v=s.version;
-      if(v!=null&&v===verMain){if(sy!=='wait'&&!anyDirty())setSy('ok');return}
+      /* Сервер не менялся, а на телефоне есть неотправленное (продали без связи, потом программу
+         открыли заново) — досылаем сразу, а не ждём следующей правки: иначе другие телефоны
+         видят неверный остаток, а при смене аккаунта или очистке телефона продажа пропадёт */
+      if(v!=null&&v===verMain){if(dirtyMain){if(!pending)push()}else if(sy!=='wait'&&!anyDirty())setSy('ok');return}
       if(!dirtyMain&&d.u===mine){if(v!=null)setVM(v);if(sy!=='wait'&&!anyDirty())setSy('ok');return}
       if($('ov').innerHTML){pend=d;pendV=v;return}
       remote(d,v);
@@ -991,7 +1002,7 @@ function debtsPayload(){return{people:D.people,ops:D.ops,trash:D.trash||[]}}
 function cleanDebts(d){return{people:d.people||[],ops:d.ops||[],trash:d.trash||[]}}
 function ddoPush(n,pre){
   if(!ddb)return;
-  if(verDebts==null&&!pre){setSy('wait');ddb.get().then(function(sn){if(sn.exists)dmergeIn(sn.data(),sn.version);ddoPush(n,true)},function(e){setSy(isNet(e)?'off':'err');scheduleRetry()});return}
+  if(verDebts==null&&!pre){setSy('wait');ddb.get().then(function(sn){if(sn.exists)dmergeIn(sn.data(),sn.version);ddoPush(n,true)},sendFail);return}
   dmine=Date.now();setSy('wait');
   var my=revDebts,sent=clone(debtsPayload()),pl=clone(sent);pl.u=dmine;
   ddb.set(pl,{ifMatch:verDebts}).then(function(r){
@@ -1012,7 +1023,7 @@ function ddoPush(n,pre){
     }
     if(e&&e.code==='version_conflict'&&n<4){
       ddb.get().then(function(sn){if(sn.exists)dmergeIn(sn.data(),sn.version);ddoPush(n+1)},function(){setSy('off');scheduleRetry()});
-    }else{setSy(isNet(e)?'off':'err');scheduleRetry()}
+    }else sendFail(e);
   });
 }
 function dmergeIn(R,v){
@@ -1029,7 +1040,7 @@ function dremote(d,v){
 function dsnap(sn){
   if(!sn.exists){if(D.people.length){dirtyDebts=true;LSS('skladgo.dirty.debts','1');dpush()}return}
   var d=sn.data();if(!d)return;var v=sn.version;
-  if(v!=null&&v===verDebts)return;
+  if(v!=null&&v===verDebts){if(dirtyDebts&&!dpending)dpush();return}   // как у склада: неотправленное досылаем и при той же версии
   if(!dirtyDebts&&d.u===dmine){if(v!=null)setVD(v);return}
   if($('ov').innerHTML){dpend=d;dpendV=v;return}
   dremote(d,v);
@@ -1313,22 +1324,22 @@ function team(){
   if($('bkd'))$('bkd').onclick=function(){backupDl();toast('💾 Копия скачана — храните файл в надёжном месте');render()};
 }
 /* ===== Покупатели: входят по почте и паролю и видят только свой долг. Хозяин подтверждает
-   их и выбирает, чьи это долги (подсказка — по телефону). Статус и выбор держит база
+   их и выбирает, чьи это долги. Телефон покупатель вписал сам, его никто не проверял: по нему
+   человека не выбираем и «совпал» не пишем — иначе любой, вписав чужой номер, одним нажатием
+   хозяина увидел бы чужие долги. Статус и выбор держит база
    (customers_guard): покупатель сам себя не подтвердит. В тестовом режиме mock.js
    подменяет custList и custSet своими ===== */
 var custList=[],custOn=false;
 function custSnap(sn){custOn=true;custList=sn.docs.map(function(d){return d.data()});if(tab==='team'&&ME&&!$('ov').innerHTML)render()}
 function custSet(uid,ch,done){if(!sdb)return;sdb.doc('customers/'+uid).update(ch).then(function(){if(done)done()},function(){toast('⚠️ Не удалось сохранить — нет связи')})}
-function phd(p){return String(p||'').replace(/\D/g,'')}
 function custHtml(){
   var pd=custList.filter(function(x){return x.status==='pending'}),ac=custList.filter(function(x){return x.status==='active'});
   var h='<div class="lbl">🛍 Покупатели ('+(pd.length+ac.length)+')</div>';
   if(!pd.length&&!ac.length)h+='<div class="empty">Покупатели появятся здесь после регистрации. Они увидят только свой долг</div>';
   pd.forEach(function(x){
-    var m=D.people.filter(function(p){return p.phone&&phd(p.phone)===phd(x.phone)})[0];
     h+='<div class="card" style="display:block"><div class="info"><b>⏳ <span data-notr>'+esc(x.name)+'</span></b><small>'+esc(x.phone)+(x.email?' · '+esc(x.email):'')+'</small></div>'
-      +'<select id="cs_'+esc(x.uid)+'" style="margin:8px 0"><option value="">Чьи это долги? — выберите человека</option>'+D.people.map(function(p){return '<option value="'+esc(p.id)+'"'+(m&&m.id===p.id?' selected':'')+'>'+esc(p.name)+(p.phone?' · '+esc(p.phone):'')+'</option>'}).join('')+'</select>'
-      +(m?'<small style="color:var(--in)">✓ Телефон совпал с «<span data-notr>'+esc(m.name)+'</span>»</small>':'<small style="color:var(--mu)">Телефон ни с кем в «Долгах» не совпал — проверьте, тот ли это человек</small>')
+      +'<select id="cs_'+esc(x.uid)+'" style="margin:8px 0"><option value="">Чьи это долги? — выберите человека</option>'+D.people.map(function(p){return '<option value="'+esc(p.id)+'">'+esc(p.name)+(p.phone?' · '+esc(p.phone):'')+'</option>'}).join('')+'</select>'
+      +'<small style="color:var(--mu)">⚠️ Телефон не проверен — позвоните покупателю</small>'
       +'<div class="two" style="margin-top:8px"><button class="go ac" type="button" data-ca="'+esc(x.uid)+'">✓ Подтвердить</button><button class="go" type="button" data-cb="'+esc(x.uid)+'" style="background:var(--card);color:var(--out);border:1px solid var(--bd)">✕ Отклонить</button></div></div>';
   });
   ac.forEach(function(x){

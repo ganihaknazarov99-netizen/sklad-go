@@ -138,7 +138,7 @@ test('экран покупателя: долг, срок, история; до 
   assert.ok(els.cuRf, 'есть «Проверить снова»');
 });
 
-test('«Покупатели» у хозяина: подсказка по телефону, подтвердить можно только выбрав человека', () => {
+test('«Покупатели» у хозяина: телефон не проверен — человека не выбираем сами, подтвердить можно только выбрав', () => {
   const html = [], тосты = [], вызовы = [];
   const els = {};
   const $ = (id) => els[id] || (els[id] = { value: '' });
@@ -148,12 +148,12 @@ test('«Покупатели» у хозяина: подсказка по тел
     { uid: 'u2', name: 'Мадина', phone: '+992937778899', status: 'active', pid: 'p2' },
   ];
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const phd = new Function(взять('phd') + ' return phd;')();
-  const custHtml = new Function('custList', 'D', 'esc', 'phd', взять('custHtml') + ' return custHtml;')(custList, D, esc, phd);
+  const custHtml = new Function('custList', 'D', 'esc', взять('custHtml') + ' return custHtml;')(custList, D, esc);
   const h = custHtml();
   assert.match(h, /Покупатели \(2\)/);
-  assert.match(h, /<option value="p1" selected>/, 'телефон совпал — человек выбран сам');
-  assert.match(h, /Телефон совпал с «<span data-notr>Фируз<\/span>»/);
+  // Телефон покупатель вписал сам: совпадение ничего не доказывает (подробно — в buyer-phone.test.js)
+  assert.doesNotMatch(h, /selected/, 'человек сам не выбран');
+  assert.match(h, /Телефон не проверен — позвоните покупателю/);
   assert.match(h, /видит долги: <span data-notr>Мадина<\/span>/);
   const btn = {};
   const document = { querySelectorAll: (q) => (q === '[data-ca]' ? [btn] : []) };
