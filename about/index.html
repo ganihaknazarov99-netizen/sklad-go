@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sklad Go — учёт склада и долгов для магазина</title>
+<meta name="description" content="Sklad Go — учёт склада и долгов для маленького магазина: на телефоне, без интернета, на русском и таджикском.">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<script src="/about/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="theme-color" content="#0a1628">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0a1628;scroll-behavior:smooth}
+*{box-sizing:border-box}
+::selection{background:#e2c286;color:#0a1628}
+a{color:#8a6a2b;text-decoration:none}
+a:hover{color:#e2c286}
+button{font-family:inherit}
+@keyframes rise{from{opacity:0;transform:translateY(105%) skewY(8deg)}to{opacity:1;transform:none}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes tape{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes flowY{0%{top:0;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:100%;opacity:0}}
+@keyframes ping{0%{transform:scale(1);opacity:.7}100%{transform:scale(2.6);opacity:0}}
+@keyframes floaty{0%,100%{transform:translateY(0) rotate(-1.2deg)}50%{transform:translateY(-12px) rotate(.6deg)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes scan{0%,100%{top:14%}50%{top:82%}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-12px) rotate(-1deg)}30%{transform:translateX(10px) rotate(1deg)}45%{transform:translateX(-8px)}60%{transform:translateX(6px)}75%{transform:translateX(-3px)}}
+@keyframes stamp{0%{opacity:0;transform:scale(1.8) rotate(-14deg)}60%{opacity:1;transform:scale(.94) rotate(-8deg)}100%{opacity:1;transform:scale(1) rotate(-8deg)}}
+@keyframes sweep{to{transform:rotate(360deg)}}
+@keyframes grain{0%,100%{transform:translate(0,0)}25%{transform:translate(-2%,1%)}50%{transform:translate(1%,-2%)}75%{transform:translate(2%,2%)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="font-family:'Manrope',system-ui,sans-serif;color:#f3efe6;background:#0a1628;overflow-x:clip;position:relative">
+
+<div ref="{{ progRef }}" style="position:fixed;left:0;top:0;height:2px;width:100%;background:#e2c286;transform-origin:0 50%;transform:scaleX(0);z-index:100"></div>
+<div style="position:fixed;inset:-50%;pointer-events:none;z-index:99;opacity:.07;background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E&quot;);animation:grain 1.2s steps(4) infinite"></div>
+
+<nav style="position:sticky;top:0;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px clamp(18px,4vw,56px);background:rgba(10,22,40,.72);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border-bottom:1px solid rgba(243,239,230,.08)">
+<a href="#top" style="display:flex;align-items:center;gap:10px;color:#f3efe6;flex:none;white-space:nowrap">
+<svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect x=".5" y=".5" width="31" height="31" rx="8" fill="#0a1628" stroke="#c9a45c" stroke-opacity=".55"></rect><polygon points="16,6 25,11 16,16 7,11" fill="#f0dcae"></polygon><polygon points="7,11 16,16 16,26 7,21" fill="#c9a45c"></polygon><polygon points="16,16 25,11 25,21 16,26" fill="#8a6a2b"></polygon><line x1="11.5" y1="8.5" x2="20.5" y2="13.5" stroke="#0a1628" stroke-opacity=".35" stroke-width="1.6"></line></svg>
+<span style="font-family:'Cormorant Garamond';font-weight:600;font-size:21px;letter-spacing:.01em;line-height:1">Sklad <span style="font-style:italic;color:#c9a45c">Go</span></span>
+</a>
+<div style="display:flex;gap:clamp(10px,1.6vw,22px);align-items:center;font-size:13px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;flex:1 1 auto">
+<div style="display:flex;gap:clamp(12px,2vw,28px);align-items:center;min-width:0;overflow-x:auto;scrollbar-width:none;white-space:nowrap;mask-image:linear-gradient(90deg,transparent,#000 24px);-webkit-mask-image:linear-gradient(90deg,transparent,#000 24px);padding-left:24px">
+<a href="#today" style="color:#9aa6bb" style-hover="color:#f3efe6">{{ L.k0 }}</a>
+<a href="#access" style="color:#9aa6bb" style-hover="color:#f3efe6">{{ L.k1 }}</a>
+<a href="#runs" style="color:#9aa6bb" style-hover="color:#f3efe6">{{ L.k2 }}</a>
+<a href="#privacy" style="color:#9aa6bb" style-hover="color:#f3efe6">{{ L.k3 }}</a>
+<a href="#roadmap" style="color:#9aa6bb" style-hover="color:#f3efe6">{{ L.k4 }}</a>
+<a href="#agents" style="color:#9aa6bb" style-hover="color:#f3efe6">{{ L.k5 }}</a>
+</div>
+<div style="display:flex;flex:none;gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(243,239,230,.2)"><button onClick="{{ setEn }}" style="height:30px;padding:0 12px;border-radius:999px;border:0;background:{{ enBg }};color:{{ enFg }};font:600 12px 'JetBrains Mono';letter-spacing:.06em;cursor:pointer;transition:background .25s,color .25s">EN</button><button onClick="{{ setRu }}" style="height:30px;padding:0 12px;border-radius:999px;border:0;background:{{ ruBg }};color:{{ ruFg }};font:600 12px 'JetBrains Mono';letter-spacing:.06em;cursor:pointer;transition:background .25s,color .25s">RU</button></div>
+<a href="https://skladgo.com" target="_blank" style="display:flex;flex:none;white-space:nowrap;align-items:center;gap:8px;background:#f3efe6;color:#0a1628;padding:9px 16px;border-radius:999px;font-weight:600" style-hover="background:#e2c286;color:#0a1628">{{ L.k6 }} <span>↗</span></a>
+</div>
+</nav>
+
+<header id="top" style="position:relative;min-height:calc(100vh - 60px);padding:clamp(40px,6vw,80px) clamp(18px,4vw,56px) 60px;overflow:hidden">
+<div aria-hidden="true" style="position:absolute;top:0;bottom:0;left:clamp(10px,3vw,40px);width:300px;overflow:hidden;opacity:.16;mask-image:linear-gradient(transparent,#000 20%,#000 80%,transparent);-webkit-mask-image:linear-gradient(transparent,#000 20%,#000 80%,transparent);pointer-events:none">
+<div style="font-family:'JetBrains Mono';font-size:12px;line-height:2.1;color:#e2c286;white-space:pre;animation:tape 40s linear infinite">
+<sc-for list="{{ tapeLines }}" as="l" hint-placeholder-count="12"><div>{{ l }}</div></sc-for>
+</div>
+</div>
+<div ref="{{ glowRef }}" aria-hidden="true" style="position:absolute;width:760px;height:760px;left:0;top:0;border-radius:50%;background:radial-gradient(circle,rgba(201,164,92,.22),rgba(201,164,92,0) 62%);pointer-events:none;transform:translate(30vw,-10vh);transition:transform .9s cubic-bezier(.2,.8,.2,1)"></div>
+
+<div style="position:relative;max-width:1400px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:clamp(40px,5vw,80px);align-items:center">
+<div ref="{{ heroTextRef }}" style="will-change:transform,opacity">
+<div style="display:inline-flex;align-items:center;gap:10px;font-family:'JetBrains Mono';font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#e2c286;animation:fadeUp .8s both">
+<span style="position:relative;width:8px;height:8px"><span style="position:absolute;inset:0;border-radius:50%;background:#e2c286"></span><span style="position:absolute;inset:0;border-radius:50%;background:#e2c286;animation:ping 1.8s ease-out infinite"></span></span>
+{{ L.k7 }}</div>
+<h1 style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(96px,15vw,236px);line-height:.8;letter-spacing:-.025em;margin:26px 0 0">
+<span style="display:block;overflow:hidden;padding-bottom:.08em"><span style="display:inline-block;animation:rise 1.2s cubic-bezier(.16,1,.3,1) .05s both">Sklad</span></span>
+<span style="display:flex;overflow:hidden;align-items:baseline;gap:.06em;padding:0 0 .1em .5em"><span style="display:inline-block;font-style:italic;font-weight:500;color:#e2c286;animation:rise 1.2s cubic-bezier(.16,1,.3,1) .2s both">Go</span><span style="display:inline-block;width:.12em;height:.12em;border-radius:50%;background:#c9a45c;animation:rise 1.2s cubic-bezier(.16,1,.3,1) .35s both"></span></span>
+</h1>
+<p style="font-family:'Cormorant Garamond';font-weight:400;font-size:clamp(23px,2.2vw,31px);line-height:1.3;letter-spacing:-.01em;max-width:560px;margin:34px 0 0;text-wrap:balance;animation:fadeUp .9s .6s both">{{ L.k8 }}</p>
+<p style="font-size:17px;line-height:1.6;color:#9aa6bb;max-width:500px;margin:14px 0 0;text-wrap:pretty;animation:fadeUp .9s .7s both">{{ L.k9 }}</p>
+<p style="font-family:'JetBrains Mono';font-size:13px;color:#66748c;margin:10px 0 0;animation:fadeUp .9s .78s both">Учёт склада и долгов для маленького магазина.</p>
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:36px;animation:fadeUp .9s .88s both">
+<a href="https://skladgo.com" target="_blank" ref="{{ magRef }}" style="display:flex;align-items:center;gap:12px;background:#c9a45c;color:#0a1628;padding:17px 26px;border-radius:999px;font-weight:600;font-size:16px;transition:transform .25s cubic-bezier(.2,.8,.2,1),background .2s" style-hover="background:#e2c286;color:#0a1628">{{ L.k10 }} <span style="width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center">→</span></a>
+<a href="#today" style="display:flex;align-items:center;padding:17px 24px;border-radius:999px;border:1px solid rgba(243,239,230,.2);color:#f3efe6;font-weight:500;font-size:16px" style-hover="border-color:#e2c286;color:#e2c286">{{ L.k11 }}</a>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:1px;background:rgba(243,239,230,.1);margin-top:56px;max-width:560px;border-top:1px solid rgba(243,239,230,.1);animation:fadeUp .9s 1s both">
+<div style="background:#0a1628;padding:16px 16px 0 0"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:37px;letter-spacing:-.015em"><span data-count="270">270</span>+</div><div style="font-size:12px;color:#66748c;margin-top:6px">{{ L.k12 }}</div></div>
+<div style="background:#0a1628;padding:16px 16px 0"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:37px;letter-spacing:-.015em"><span data-count="6">6</span>{{ L.k13 }}</div><div style="font-size:12px;color:#66748c;margin-top:6px">{{ L.k14 }}</div></div>
+<div style="background:#0a1628;padding:16px 16px 0"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:37px;letter-spacing:-.015em"><span data-count="127">127</span></div><div style="font-size:12px;color:#66748c;margin-top:6px">{{ L.k15 }}</div></div>
+<div style="background:#0a1628;padding:16px 0 0 16px"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:37px;letter-spacing:-.015em">0</div><div style="font-size:12px;color:#66748c;margin-top:6px">{{ L.k16 }}</div></div>
+</div>
+</div>
+
+<div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:18px;animation:fadeUp 1.2s .35s both">
+<div aria-hidden="true" style="position:absolute;width:520px;height:520px;top:50%;left:50%;margin:-260px 0 0 -260px;border-radius:50%;border:1px dashed rgba(226,194,134,.18);animation:spin 80s linear infinite"></div>
+<div aria-hidden="true" style="position:absolute;width:400px;height:400px;top:50%;left:50%;margin:-200px 0 0 -200px;border-radius:50%;border:1px solid rgba(226,194,134,.08)"></div>
+<div style="font-family:'JetBrains Mono';font-size:11px;color:#e2c286;letter-spacing:.1em;text-transform:uppercase;position:relative">{{ L.k17 }}</div>
+<div ref="{{ tiltRef }}" style="position:relative;transition:transform .5s cubic-bezier(.2,.8,.2,1);transform-style:preserve-3d">
+<div style="animation:floaty 8s ease-in-out infinite">
+<div style="width:min(350px,88vw);height:690px;border-radius:52px;background:#050b16;padding:10px;box-shadow:0 60px 120px -30px rgba(201,164,92,.55),0 0 0 1px rgba(226,194,134,.22),inset 0 0 0 2px #1d2e4a">
+<div style="position:relative;width:100%;height:100%;border-radius:43px;overflow:hidden;background:{{ p.bg }};color:{{ p.text }};display:flex;flex-direction:column;transition:background .45s,color .45s">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 26px 4px;font-family:'JetBrains Mono';font-size:12px;font-weight:600">
+<span>{{ clock }}</span>
+<span style="width:92px;height:26px;border-radius:14px;background:#050b16"></span>
+<span style="color:{{ netColor }};transition:color .3s">{{ netLabel }}</span>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px 10px">
+<div style="display:flex;align-items:center;gap:8px">
+<svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect x=".5" y=".5" width="31" height="31" rx="8" fill="#0a1628" stroke="#c9a45c" stroke-opacity=".55"></rect><polygon points="16,6 25,11 16,16 7,11" fill="#f0dcae"></polygon><polygon points="7,11 16,16 16,26 7,21" fill="#c9a45c"></polygon><polygon points="16,16 25,11 25,21 16,26" fill="#8a6a2b"></polygon><line x1="11.5" y1="8.5" x2="20.5" y2="13.5" stroke="#0a1628" stroke-opacity=".35" stroke-width="1.6"></line></svg>
+<span style="font-family:'Cormorant Garamond';font-weight:600;font-size:20px;letter-spacing:.01em;line-height:1">Sklad <span style="font-style:italic;color:#c9a45c">Go</span></span>
+</div>
+<div style="display:flex;gap:5px">
+<button onClick="{{ toggleLang }}" style="height:30px;padding:0 9px;border-radius:9px;border:1px solid {{ p.line }};background:{{ p.card }};color:{{ p.text }};font:600 11px 'JetBrains Mono';cursor:pointer">{{ langLabel }}</button>
+<button onClick="{{ toggleNet }}" style="height:30px;padding:0 9px;border-radius:9px;border:1px solid {{ p.line }};background:{{ p.card }};color:{{ p.text }};font:600 11px 'Manrope';cursor:pointer">{{ netBtn }}</button>
+<button onClick="{{ toggleTheme }}" style="width:30px;height:30px;border-radius:9px;border:1px solid {{ p.line }};background:{{ p.card }};color:{{ p.text }};font-size:13px;cursor:pointer">{{ themeIcon }}</button>
+</div>
+</div>
+<sc-if value="{{ syncing }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 18px 8px;padding:8px 12px;border-radius:10px;background:rgba(201,164,92,.16);color:#e2c286;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;animation:fadeUp .3s both"><span style="width:12px;height:12px;border:2px solid #e2c286;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite"></span>{{ t.syncing }}</div>
+</sc-if>
+<sc-if value="{{ offline }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 18px 8px;padding:8px 12px;border-radius:10px;background:rgba(245,158,11,.16);color:#f59e0b;font-size:12px;font-weight:600;animation:fadeUp .3s both">{{ t.offline }} · {{ pending }}</div>
+</sc-if>
+<div style="position:relative;display:flex;margin:0 18px;padding:4px;border-radius:13px;background:{{ p.card }};border:1px solid {{ p.line }}">
+<div style="position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px) / 3);border-radius:9px;background:#c9a45c;transform:translateX({{ tabX }}%);transition:transform .45s cubic-bezier(.16,1,.3,1)"></div>
+<sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="3">
+<button onClick="{{ tb.go }}" style="position:relative;flex:1;height:32px;border:0;background:transparent;color:{{ tb.fg }};font:600 12px 'Manrope';cursor:pointer;transition:color .3s">{{ tb.label }}</button>
+</sc-for>
+</div>
+<div style="flex:1;overflow:auto;padding:12px 18px 80px">
+<sc-if value="{{ isStock }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:7px">
+<sc-for list="{{ items }}" as="it" hint-placeholder-count="5">
+<div style="display:flex;align-items:center;gap:8px;padding:9px 9px 9px 12px;border-radius:14px;background:{{ p.card }};border:1px solid {{ it.border }};transition:border-color .3s,background .3s">
+<div style="flex:1;min-width:0">
+<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.name }}</div>
+<div style="font-size:11px;color:{{ p.muted }};margin-top:2px">{{ it.meta }}</div>
+</div>
+<button onClick="{{ it.sell }}" aria-label="sell" style="width:30px;height:30px;border-radius:9px;border:1px solid {{ p.line }};background:transparent;color:{{ p.text }};font-size:16px;cursor:pointer;transition:transform .1s" style-active="transform:scale(.88)">−</button>
+<div style="width:30px;text-align:center;font-family:'JetBrains Mono';font-weight:600;font-size:15px;color:{{ it.qtyColor }};transition:color .3s">{{ it.qty }}</div>
+<button onClick="{{ it.add }}" aria-label="arrival" style="width:30px;height:30px;border-radius:9px;border:0;background:#c9a45c;color:#0a1628;font-size:16px;cursor:pointer;transition:transform .1s" style-active="transform:scale(.88)">+</button>
+</div>
+</sc-for>
+<button onClick="{{ sendRestock }}" style="margin-top:4px;height:40px;border-radius:12px;border:1px dashed #3fae7a;background:rgba(34,160,107,.1);color:#3fae7a;font:600 12px 'Manrope';cursor:pointer">{{ t.restock }} ({{ lowCount }}) → WhatsApp</button>
+<button onClick="{{ scanItem }}" style="height:40px;border-radius:12px;border:1px solid {{ p.line }};background:{{ p.card }};color:{{ p.text }};font:600 12px 'Manrope';cursor:pointer">{{ t.scan }}</button>
+</div>
+</sc-if>
+<sc-if value="{{ isDebts }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ debts }}" as="d" hint-placeholder-count="3">
+<div style="padding:12px;border-radius:14px;background:{{ p.card }};border:1px solid {{ p.line }}">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+<div style="font-weight:600;font-size:13px">{{ d.name }}</div>
+<div style="font-family:'JetBrains Mono';font-weight:600;font-size:13px;color:{{ d.color }}">{{ d.left }}</div>
+</div>
+<div style="font-size:11px;color:{{ p.muted }};margin-top:3px">{{ d.meta }}</div>
+<div style="height:5px;border-radius:3px;background:{{ p.line }};margin-top:10px;overflow:hidden"><div style="height:100%;width:{{ d.pct }}%;background:#c9a45c;border-radius:3px;transition:width .7s cubic-bezier(.16,1,.3,1)"></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
+<span style="font-family:'JetBrains Mono';font-size:10px;color:{{ p.muted }}">{{ d.paidLine }}</span>
+<button onClick="{{ d.pay }}" style="height:28px;padding:0 10px;border-radius:8px;border:0;background:{{ d.btnBg }};color:#0a1628;font:600 11px 'Manrope';cursor:pointer">{{ d.btn }}</button>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ isFeed }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column">
+<sc-for list="{{ feed }}" as="f" hint-placeholder-count="5">
+<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid {{ p.line }}">
+<span style="width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none;background:{{ f.dot }}"></span>
+<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">{{ f.text }}</div><div style="font-size:11px;color:{{ p.muted }};margin-top:2px">{{ f.who }} · {{ f.time }}</div></div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:14px;right:14px;bottom:16px;padding:13px 14px;border-radius:16px;background:#050b16;color:#f3efe6;font-size:12px;line-height:1.4;font-weight:500;box-shadow:0 14px 30px rgba(0,0,0,.4);border:1px solid rgba(226,194,134,.2);animation:fadeUp .35s cubic-bezier(.16,1,.3,1) both">{{ toast }}</div>
+</sc-if>
+<sc-if value="{{ scanning }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:rgba(3,8,7,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;animation:fadeUp .25s both">
+<div style="position:relative;width:220px;height:150px;border-radius:18px;overflow:hidden;box-shadow:0 0 0 2px #e2c286">
+<div style="position:absolute;inset:34px 30px;background:repeating-linear-gradient(90deg,#f3efe6 0 3px,transparent 3px 5px,#f3efe6 5px 6px,transparent 6px 10px,#f3efe6 10px 14px,transparent 14px 16px)"></div>
+<div style="position:absolute;left:0;right:0;height:2px;background:#f43f5e;box-shadow:0 0 14px 2px #f43f5e;animation:scan 1.1s ease-in-out infinite"></div>
+</div>
+<div style="font-family:'JetBrains Mono';font-size:12px;color:#9aa6bb">{{ t.reading }}</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</header>
+<section ref="{{ wareRef }}" style="position:relative;height:340vh;background:#0a1628">
+<div style="position:sticky;top:0;height:100vh;overflow:hidden;background:radial-gradient(ellipse 70% 60% at 62% 58%,#14274a 0%,#0a1628 70%)">
+<div aria-hidden="true" style="position:absolute;left:clamp(50%,calc(100% - 440px),64%);top:58%;width:0;height:0;perspective:1800px;perspective-origin:50% 40%">
+<div ref="{{ sceneRef }}" style="position:absolute;left:0;top:0;transform-style:preserve-3d;transform:rotateX(58deg) rotateZ(-28deg) scale(.78)">
+<div style="position:absolute;left:-210px;top:-210px;width:420px;height:420px;border:1px solid rgba(226,194,134,.28);background-image:linear-gradient(rgba(226,194,134,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(226,194,134,.12) 1px,transparent 1px);background-size:64px 64px;background-position:18px 18px;box-shadow:0 0 120px rgba(201,164,92,.18)"></div>
+<sc-for list="{{ cubes }}" as="c" hint-placeholder-count="0">
+<div data-cube="" style="position:absolute;left:-28px;top:-28px;width:56px;height:56px;transform-style:preserve-3d;opacity:0;transform:translate3d({{ c.x }}px,{{ c.y }}px,{{ c.zpx }}px)">
+<div style="position:absolute;inset:0;transform-style:preserve-3d;transform:translateZ(28px)">
+<div data-top="" style="position:absolute;inset:0;transform:translateZ(28px);background-color:#e2c286;background-image:linear-gradient(90deg,transparent 43%,rgba(10,22,40,.2) 43%,rgba(10,22,40,.2) 57%,transparent 57%);box-shadow:inset 0 0 0 1px rgba(10,22,40,.25);transition:background-color .4s,box-shadow .4s"></div>
+<div style="position:absolute;inset:0;transform:rotateX(90deg) translateZ(28px);background:#b48f4c;box-shadow:inset 0 0 0 1px rgba(10,22,40,.25)"></div>
+<div style="position:absolute;inset:0;transform:rotateX(-90deg) translateZ(28px);background:#b48f4c;box-shadow:inset 0 0 0 1px rgba(10,22,40,.25)"></div>
+<div style="position:absolute;inset:0;transform:rotateY(90deg) translateZ(28px);background:#8f6f35;box-shadow:inset 0 0 0 1px rgba(10,22,40,.25)"></div>
+<div style="position:absolute;inset:0;transform:rotateY(-90deg) translateZ(28px);background:#8f6f35;box-shadow:inset 0 0 0 1px rgba(10,22,40,.25)"></div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="position:absolute;left:clamp(18px,4vw,56px);top:clamp(90px,14vh,150px);max-width:min(520px,calc(100% - 36px))">
+<div style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#e2c286">{{ L.k18 }}</div>
+<div style="position:relative;margin-top:28px;min-height:260px">
+<sc-for list="{{ wareSteps }}" as="ws" hint-placeholder-count="1">
+<div style="position:absolute;left:0;top:0;right:0;opacity:{{ ws.op }};transform:translateY({{ ws.ty }}px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .8s cubic-bezier(.16,1,.3,1);pointer-events:none">
+<div style="font-family:'JetBrains Mono';font-size:13px;color:#9aa6bb">{{ ws.n }} — {{ ws.k }}</div>
+<div style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(50px,6.4vw,100px);line-height:.92;letter-spacing:-.015em;margin-top:14px;color:#f3efe6;text-wrap:balance">{{ ws.title }}</div>
+<div style="font-size:18px;line-height:1.55;color:#9aa6bb;margin-top:20px;max-width:400px;text-wrap:pretty">{{ ws.body }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="position:absolute;left:clamp(18px,4vw,56px);bottom:clamp(28px,6vh,60px);display:flex;align-items:flex-end;gap:22px">
+<div style="width:2px;height:90px;background:rgba(243,239,230,.12);border-radius:2px;overflow:hidden"><div ref="{{ wareBarRef }}" style="width:100%;height:100%;background:#c9a45c;transform-origin:50% 0;transform:scaleY(0)"></div></div>
+<div><div ref="{{ unitsRef }}" style="font-family:'Cormorant Garamond';font-weight:600;font-size:72px;line-height:.85;color:#f3efe6">0</div><div style="font-family:'JetBrains Mono';font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#9aa6bb;margin-top:10px">{{ L.k19 }}</div></div>
+</div>
+</div>
+</section>
+
+<div style="border-top:1px solid rgba(243,239,230,.08);border-bottom:1px solid rgba(243,239,230,.08);overflow:hidden;padding:22px 0;background:#c9a45c;color:#0a1628">
+<div style="display:flex;width:max-content;animation:marquee 34s linear infinite;font-family:'Cormorant Garamond';font-weight:500;font-size:clamp(23px,2.7vw,34px);letter-spacing:-.015em;gap:44px;padding-right:44px;white-space:nowrap">
+<span>{{ L.k20 }}</span><span>✳</span><span>{{ L.k21 }}</span><span>✳</span><span>{{ L.k22 }}</span><span>✳</span><span>{{ L.k23 }}</span><span>✳</span><span>{{ L.k24 }}</span><span>✳</span><span>Русский · Тоҷикӣ</span><span>✳</span><span>{{ L.k25 }}</span><span>✳</span>
+<span>{{ L.k26 }}</span><span>✳</span><span>{{ L.k27 }}</span><span>✳</span><span>{{ L.k28 }}</span><span>✳</span><span>{{ L.k29 }}</span><span>✳</span><span>{{ L.k30 }}</span><span>✳</span><span>Русский · Тоҷикӣ</span><span>✳</span><span>{{ L.k31 }}</span><span>✳</span>
+</div>
+</div>
+
+<section id="today" style="background:#f5f1e8;color:#0a1628;padding:clamp(80px,11vw,150px) clamp(18px,4vw,56px)">
+<div style="max-width:1400px;margin:0 auto">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:32px;align-items:end">
+<div>
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a6a2b">{{ L.k32 }}</div>
+<h2 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(43px,6.3vw,94px);line-height:.95;letter-spacing:-.045em;margin:22px 0 0;text-wrap:balance">{{ L.k33 }}</h2>
+</div>
+<p data-reveal="" style="font-size:18px;line-height:1.6;color:#555d6b;max-width:460px;margin:0;justify-self:end;text-wrap:pretty">{{ L.k34 }}</p>
+</div>
+<div style="margin-top:72px;border-top:1px solid #0a1628">
+<sc-for list="{{ features }}" as="f" hint-placeholder-count="7">
+<div data-reveal="" style="position:relative;display:grid;grid-template-columns:minmax(56px,110px) minmax(0,1.3fr) minmax(0,1fr);gap:clamp(16px,3vw,48px);align-items:baseline;padding:clamp(26px,3vw,40px) 0;border-bottom:1px solid rgba(10,22,40,.2);transition:padding .4s cubic-bezier(.16,1,.3,1),background .3s" style-hover="padding-left:18px;background:#ece5d6">
+<div style="font-family:'JetBrains Mono';font-size:14px;color:#8a6a2b">{{ f.n }}</div>
+<div style="font-family:'Cormorant Garamond';font-weight:500;font-size:clamp(25px,2.9vw,43px);line-height:1.08;letter-spacing:-.015em;text-wrap:balance">{{ f.title }}</div>
+<div style="font-size:16px;line-height:1.55;color:#555d6b;text-wrap:pretty">{{ f.body }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</section>
+
+<section style="background:#f5f1e8;color:#0a1628;padding:0 clamp(18px,4vw,56px) clamp(80px,11vw,150px)">
+<div style="max-width:1400px;margin:0 auto;background:#0a1628;color:#f3efe6;border-radius:32px;padding:clamp(36px,6vw,90px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:clamp(40px,6vw,90px);align-items:center;position:relative;overflow:hidden">
+<div aria-hidden="true" style="position:absolute;right:-160px;top:-160px;width:480px;height:480px;border-radius:50%;background:radial-gradient(circle,rgba(201,164,92,.3),transparent 65%)"></div>
+<div style="position:relative">
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#e2c286">{{ L.k35 }}</div>
+<h2 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(36px,4.9vw,69px);line-height:1;letter-spacing:-.015em;margin:20px 0 0;text-wrap:balance">{{ L.k36 }}</h2>
+<p data-reveal="" style="font-size:18px;line-height:1.6;color:#9aa6bb;margin:24px 0 0;max-width:480px;text-wrap:pretty">{{ L.k37 }}</p>
+<div data-reveal="" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:28px;max-width:480px">
+<span style="padding:10px 16px;border-radius:999px;border:1px solid rgba(226,194,134,.35);color:#f3efe6;font-size:14px">{{ L.k38 }}</span>
+<span style="padding:10px 16px;border-radius:999px;border:1px solid rgba(226,194,134,.35);color:#f3efe6;font-size:14px">{{ L.k39 }}</span>
+<span style="padding:10px 16px;border-radius:999px;border:1px solid rgba(226,194,134,.35);color:#f3efe6;font-size:14px">{{ L.k40 }}</span>
+<span style="padding:10px 16px;border-radius:999px;background:#c9a45c;color:#0a1628;font-size:14px;font-weight:600">{{ L.k41 }}</span>
+</div>
+</div>
+<div data-reveal="" style="position:relative;display:flex;flex-direction:column;gap:18px">
+<div key="{{ lockKey }}" style="position:relative;background:#f5f1e8;color:#0a1628;border-radius:20px;padding:28px;font-family:'JetBrains Mono';animation:{{ lockAnim }}">
+<div style="display:flex;justify-content:space-between;font-size:12px;color:#555d6b;letter-spacing:.06em;text-transform:uppercase"><span>{{ L.k42 }}</span><span>03.11.2026</span></div>
+<div style="font-family:'Cormorant Garamond';font-weight:500;font-size:27px;margin-top:20px;letter-spacing:-.015em">Фарход Р.</div>
+<div style="font-size:13px;color:#555d6b;margin-top:4px">{{ L.k43 }}</div>
+<div style="display:flex;align-items:baseline;gap:14px;margin-top:22px;border-top:1px dashed rgba(10,22,40,.3);padding-top:18px">
+<span style="font-family:'Cormorant Garamond';font-weight:600;font-size:66px;letter-spacing:-.015em;text-decoration:{{ lockStrike }};text-decoration-color:#f43f5e">600</span>
+<span style="font-size:14px;color:#555d6b">смн</span>
+<sc-if value="{{ lockTyping }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Cormorant Garamond';font-weight:600;font-size:66px;letter-spacing:-.015em;color:#f43f5e">→ 60<span style="animation:blink .7s steps(1) infinite">|</span></span></sc-if>
+</div>
+<sc-if value="{{ lockRefused }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;right:24px;top:70px;border:3px solid #f43f5e;color:#f43f5e;border-radius:10px;padding:8px 14px;font-family:'Cormorant Garamond';font-weight:600;font-size:24px;letter-spacing:.02em;animation:stamp .5s cubic-bezier(.2,.8,.2,1) both;background:rgba(245,241,232,.85)">{{ L.k44 }}</div>
+</sc-if>
+</div>
+<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+<button onClick="{{ tryEdit }}" style="height:50px;padding:0 22px;border-radius:999px;border:1px solid rgba(243,239,230,.25);background:transparent;color:#f3efe6;font-weight:600;font-size:15px;cursor:pointer" style-hover="border-color:#f43f5e;color:#f43f5e">{{ L.k45 }}</button>
+<span style="font-family:'JetBrains Mono';font-size:12px;color:{{ lockMsgColor }};transition:color .3s">{{ lockMsg }}</span>
+</div>
+</div>
+</div>
+</section>
+
+<section id="access" style="background:#0a1628;padding:clamp(80px,11vw,150px) clamp(18px,4vw,56px)">
+<div style="max-width:1400px;margin:0 auto">
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#e2c286">{{ L.k46 }}</div>
+<h2 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(43px,6.3vw,94px);line-height:.95;letter-spacing:-.045em;margin:22px 0 0;max-width:1000px;text-wrap:balance">{{ L.k47 }}</h2>
+<p data-reveal="" style="font-size:18px;line-height:1.6;color:#9aa6bb;margin:24px 0 0;max-width:620px;text-wrap:pretty">{{ L.k48 }}</p>
+<div data-reveal="" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:44px">
+<sc-for list="{{ roles }}" as="r" hint-placeholder-count="4">
+<button onClick="{{ r.go }}" style="height:48px;padding:0 22px;border-radius:999px;border:1px solid {{ r.border }};background:{{ r.bg }};color:{{ r.fg }};font-weight:600;font-size:15px;cursor:pointer;transition:all .3s">{{ r.label }}</button>
+</sc-for>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px;margin-top:28px">
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+<sc-for list="{{ blocks }}" as="b" hint-placeholder-count="6">
+<div style="min-height:120px;padding:20px;border-radius:18px;border:1px solid {{ b.border }};background:{{ b.bg }};opacity:{{ b.op }};transform:scale({{ b.sc }});transition:all .55s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;justify-content:space-between;gap:16px">
+<div style="font-family:'JetBrains Mono';font-size:11px;color:{{ b.tag }};letter-spacing:.06em;text-transform:uppercase">{{ b.state }}</div>
+<div style="font-family:'Cormorant Garamond';font-weight:500;font-size:21px;letter-spacing:-.015em;color:{{ b.fg }}">{{ b.name }}</div>
+</div>
+</sc-for>
+</div>
+<div style="border-radius:24px;border:1px solid rgba(243,239,230,.12);padding:clamp(24px,3vw,40px);display:flex;flex-direction:column;justify-content:space-between;gap:28px">
+<div style="font-family:'Cormorant Garamond';font-weight:400;font-size:clamp(25px,2.5vw,34px);line-height:1.3;letter-spacing:-.015em;text-wrap:pretty">{{ roleText }}</div>
+<div style="display:flex;flex-direction:column;gap:12px;font-size:15px;line-height:1.5;color:#9aa6bb">
+<div style="display:flex;gap:14px"><span style="font-family:'JetBrains Mono';color:#e2c286">—</span>{{ L.k49 }}</div>
+<div style="display:flex;gap:14px"><span style="font-family:'JetBrains Mono';color:#e2c286">—</span>{{ L.k50 }}</div>
+<div style="display:flex;gap:14px"><span style="font-family:'JetBrains Mono';color:#e2c286">—</span>{{ L.k51 }}</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section id="runs" style="background:#0a1628;padding:0 clamp(18px,4vw,56px) clamp(80px,11vw,150px)">
+<div style="max-width:1400px;margin:0 auto;border-top:1px solid rgba(243,239,230,.1);padding-top:clamp(80px,9vw,130px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:clamp(40px,6vw,100px)">
+<div>
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#e2c286">{{ L.k52 }}</div>
+<h2 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(43px,5.6vw,83px);line-height:.95;letter-spacing:-.045em;margin:22px 0 0;text-wrap:balance">{{ L.k53 }}</h2>
+<div style="display:flex;flex-direction:column;margin-top:48px;border-top:1px solid rgba(243,239,230,.1)">
+<div data-reveal="" style="padding:22px 0;border-bottom:1px solid rgba(243,239,230,.1)"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:22px">{{ L.k54 }}</div><div style="font-size:15px;line-height:1.6;color:#9aa6bb;margin-top:8px;text-wrap:pretty">{{ L.k55 }}</div></div>
+<div data-reveal="" style="padding:22px 0;border-bottom:1px solid rgba(243,239,230,.1)"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:22px">{{ L.k56 }}</div><div style="font-size:15px;line-height:1.6;color:#9aa6bb;margin-top:8px;text-wrap:pretty">{{ L.k57 }}</div></div>
+<div data-reveal="" style="padding:22px 0;border-bottom:1px solid rgba(243,239,230,.1)"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:22px">{{ L.k58 }}</div><div style="font-size:15px;line-height:1.6;color:#9aa6bb;margin-top:8px;text-wrap:pretty">{{ L.k59 }}</div></div>
+<div data-reveal="" style="padding:22px 0;border-bottom:1px solid rgba(243,239,230,.1)"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:22px">{{ L.k60 }}</div><div style="font-size:15px;line-height:1.6;color:#9aa6bb;margin-top:8px;text-wrap:pretty">{{ L.k61 }}</div></div>
+</div>
+</div>
+<div data-reveal="" style="position:sticky;top:110px;align-self:start;display:flex;flex-direction:column;align-items:stretch">
+<sc-for list="{{ arch }}" as="a" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;align-items:stretch">
+<div style="position:relative;border-radius:20px;border:1px solid {{ a.border }};background:{{ a.bg }};padding:22px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+<div><div style="font-family:'JetBrains Mono';font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#e2c286">{{ a.tag }}</div><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:24px;letter-spacing:-.015em;margin-top:6px">{{ a.name }}</div></div>
+<div style="font-family:'JetBrains Mono';font-size:12px;color:#9aa6bb;text-align:right">{{ a.note }}</div>
+</div>
+<sc-if value="{{ a.link }}" hint-placeholder-val="{{ true }}">
+<div style="position:relative;height:64px;margin-left:44px;border-left:1px dashed rgba(226,194,134,.35)">
+<span style="position:absolute;left:-4px;width:7px;height:7px;border-radius:50%;background:#e2c286;box-shadow:0 0 12px #e2c286;animation:flowY 1.8s linear infinite;animation-delay:{{ a.delay }}"></span>
+<span style="position:absolute;left:-4px;width:7px;height:7px;border-radius:50%;background:#e2c286;box-shadow:0 0 12px #e2c286;animation:flowY 1.8s linear infinite;animation-delay:{{ a.delay2 }}"></span>
+<span style="position:absolute;left:18px;top:50%;transform:translateY(-50%);font-family:'JetBrains Mono';font-size:11px;color:#66748c">{{ a.link }}</span>
+</div>
+</sc-if>
+</div>
+</sc-for>
+<div style="display:flex;align-items:center;gap:18px;margin-top:22px;padding:20px 24px;border-radius:20px;background:#c9a45c;color:#0a1628">
+<div style="position:relative;width:52px;height:52px;border-radius:50%;border:2px solid rgba(10,22,40,.35);flex:none">
+<div style="position:absolute;left:50%;top:50%;width:2px;height:22px;margin-left:-1px;background:#0a1628;transform-origin:50% 0;animation:sweep 6s linear infinite;border-radius:2px;top:50%"></div>
+<div style="position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#0a1628"></div>
+</div>
+<div><div style="font-family:'Cormorant Garamond';font-weight:600;font-size:22px;letter-spacing:-.015em">{{ L.k62 }}</div><div style="font-size:14px;margin-top:4px">{{ L.k63 }}</div></div>
+</div>
+</div>
+</div>
+</section>
+
+<section id="privacy" style="background:#f5f1e8;color:#0a1628;padding:clamp(80px,11vw,150px) clamp(18px,4vw,56px)">
+<div style="max-width:1400px;margin:0 auto">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:32px;align-items:end">
+<div>
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a6a2b">{{ L.k64 }}</div>
+<h2 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(43px,6.3vw,94px);line-height:.95;letter-spacing:-.045em;margin:22px 0 0;text-wrap:balance">{{ L.k65 }}</h2>
+</div>
+<p data-reveal="" style="font-size:18px;line-height:1.6;color:#555d6b;max-width:480px;margin:0;justify-self:end;text-wrap:pretty">{{ L.k66 }} <a href="https://skladgo.com/privacy.html" target="_blank" style="color:#8a6a2b;border-bottom:1px solid currentColor" style-hover="color:#0a1628">{{ L.k67 }}</a></p>
+</div>
+<div data-reveal="" style="display:flex;gap:6px;margin-top:64px;flex-wrap:wrap">
+<sc-for list="{{ privTabs }}" as="pt" hint-placeholder-count="4">
+<button onClick="{{ pt.go }}" style="height:44px;padding:0 20px;border-radius:999px;border:1px solid #0a1628;background:{{ pt.bg }};color:{{ pt.fg }};font-weight:600;font-size:14px;cursor:pointer;transition:all .25s">{{ pt.label }}</button>
+</sc-for>
+</div>
+<div key="{{ privKey }}" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:1px;background:rgba(10,22,40,.18);border:1px solid rgba(10,22,40,.18);border-radius:24px;overflow:hidden;margin-top:20px">
+<sc-for list="{{ privItems }}" as="pi" hint-placeholder-count="6">
+<div style="background:#f5f1e8;padding:28px;min-height:170px;animation:fadeUp .5s cubic-bezier(.16,1,.3,1) both;animation-delay:{{ pi.delay }}">
+<div style="font-family:'Cormorant Garamond';font-weight:500;font-size:23px;letter-spacing:-.015em">{{ pi.title }}</div>
+<div style="font-size:15px;line-height:1.6;color:#555d6b;margin-top:12px;text-wrap:pretty">{{ pi.body }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</section>
+
+<section style="background:#f5f1e8;color:#0a1628;padding:0 clamp(18px,4vw,56px) clamp(80px,11vw,150px)">
+<div style="max-width:1400px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:clamp(40px,6vw,100px);border-top:1px solid #0a1628;padding-top:clamp(60px,8vw,110px)">
+<div>
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a6a2b">{{ L.k68 }}</div>
+<h2 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(39px,4.9vw,72px);line-height:.98;letter-spacing:-.015em;margin:22px 0 0;text-wrap:balance">{{ L.k69 }}</h2>
+<div data-reveal="" style="margin-top:44px;padding:28px;border-radius:24px;background:#0a1628;color:#f3efe6">
+<div style="font-family:'JetBrains Mono';font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#f59e0b">{{ L.k70 }}</div>
+<div style="display:flex;align-items:baseline;gap:16px;margin-top:16px;flex-wrap:wrap"><span style="font-family:'Cormorant Garamond';font-weight:600;font-size:68px;letter-spacing:-.015em">≈28</span><span style="color:#9aa6bb">{{ L.k71 }}</span><span style="font-family:'Cormorant Garamond';font-weight:600;font-size:68px;letter-spacing:-.015em;margin-left:12px">$4.91</span><span style="color:#9aa6bb">{{ L.k72 }}</span></div>
+<div style="height:8px;border-radius:4px;background:#1d2e4a;margin-top:20px;overflow:hidden"><div ref="{{ trialRef }}" style="height:100%;width:0;background:#f59e0b;border-radius:4px;transition:width 1.6s cubic-bezier(.16,1,.3,1)"></div></div>
+<div style="font-size:14px;line-height:1.55;color:#9aa6bb;margin-top:16px">{{ L.k73 }}</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column">
+<sc-for list="{{ gaps }}" as="g" hint-placeholder-count="8">
+<details data-reveal="" style="border-bottom:1px solid rgba(10,22,40,.2)">
+<summary style="list-style:none;display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:16px;align-items:baseline;padding:22px 0;cursor:pointer">
+<span style="font-family:'JetBrains Mono';font-size:13px;color:#8a6a2b">{{ g.n }}</span>
+<span style="font-family:'Cormorant Garamond';font-weight:500;font-size:clamp(18px,1.7vw,22px);letter-spacing:-.015em;line-height:1.25">{{ g.gap }}</span>
+<span style="font-family:'JetBrains Mono';font-size:11px;color:#555d6b;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">{{ g.owner }}</span>
+</summary>
+<div style="padding:0 0 24px 60px;font-size:15px;line-height:1.6;color:#555d6b;text-wrap:pretty">{{ g.why }}</div>
+</details>
+</sc-for>
+</div>
+</div>
+</section>
+
+<section id="roadmap" style="background:#0a1628;padding:clamp(80px,11vw,150px) 0;overflow:hidden">
+<div style="max-width:1400px;margin:0 auto;padding:0 clamp(18px,4vw,56px)">
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#e2c286">{{ L.k74 }}</div>
+<h2 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(43px,6.3vw,94px);line-height:.95;letter-spacing:-.045em;margin:22px 0 0;text-wrap:balance">{{ L.k75 }}</h2>
+</div>
+<div ref="{{ roadRef }}" style="display:flex;gap:16px;margin-top:64px;padding:0 clamp(18px,4vw,56px) 24px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding:0 clamp(18px,4vw,56px);scrollbar-width:none">
+<sc-for list="{{ roadmap }}" as="rm" hint-placeholder-count="6">
+<div data-reveal="" style="flex:none;width:min(380px,82vw);min-height:380px;scroll-snap-align:start;border-radius:28px;border:1px solid rgba(243,239,230,.12);background:{{ rm.bg }};color:{{ rm.fg }};padding:32px;display:flex;flex-direction:column;justify-content:space-between;gap:24px;transition:transform .4s cubic-bezier(.16,1,.3,1),border-color .3s" style-hover="transform:translateY(-8px);border-color:#e2c286">
+<div style="font-family:'Cormorant Garamond';font-weight:600;font-size:117px;line-height:.8;letter-spacing:-.015em;color:transparent;-webkit-text-stroke:1.5px {{ rm.stroke }}">{{ rm.n }}</div>
+<div><div style="font-family:'Cormorant Garamond';font-weight:600;font-size:29px;letter-spacing:-.015em;line-height:1.1">{{ rm.title }}</div><div style="font-size:15px;line-height:1.6;margin-top:14px;opacity:.78;text-wrap:pretty">{{ rm.body }}</div></div>
+</div>
+</sc-for>
+</div>
+<div style="max-width:1400px;margin:16px auto 0;padding:0 clamp(18px,4vw,56px);display:flex;gap:8px">
+<button onClick="{{ roadPrev }}" aria-label="previous" style="width:52px;height:52px;border-radius:50%;border:1px solid rgba(243,239,230,.2);background:transparent;color:#f3efe6;font-size:18px;cursor:pointer" style-hover="border-color:#e2c286;color:#e2c286">←</button>
+<button onClick="{{ roadNext }}" aria-label="next" style="width:52px;height:52px;border-radius:50%;border:1px solid rgba(243,239,230,.2);background:transparent;color:#f3efe6;font-size:18px;cursor:pointer" style-hover="border-color:#e2c286;color:#e2c286">→</button>
+</div>
+</section>
+
+<section id="agents" style="background:#0a1628;padding:0 clamp(18px,4vw,56px) clamp(80px,11vw,150px)">
+<div style="max-width:1400px;margin:0 auto;border-top:1px solid rgba(243,239,230,.1);padding-top:clamp(80px,9vw,130px)">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:32px;align-items:end">
+<div>
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#e2c286">{{ L.k76 }}</div>
+<h2 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(39px,5.4vw,81px);line-height:.98;letter-spacing:-.045em;margin:22px 0 0;text-wrap:balance">{{ L.k77 }}</h2>
+</div>
+<p data-reveal="" style="font-size:18px;line-height:1.6;color:#9aa6bb;max-width:500px;margin:0;justify-self:end;text-wrap:pretty">{{ L.k78 }}</p>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:10px;margin-top:64px">
+<sc-for list="{{ agents }}" as="ag" hint-placeholder-count="10">
+<div data-reveal="" style="position:relative;border-radius:20px;border:1px solid {{ ag.border }};background:{{ ag.bg }};padding:22px;min-height:180px;display:flex;flex-direction:column;justify-content:space-between;gap:18px;transition:transform .35s cubic-bezier(.16,1,.3,1),border-color .3s" style-hover="transform:translateY(-4px);border-color:#e2c286">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+<span style="font-family:'JetBrains Mono';font-size:14px;font-weight:600;color:#e2c286">{{ ag.name }}</span>
+<span style="font-family:'JetBrains Mono';font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:{{ ag.kindColor }}">{{ ag.kind }}</span>
+</div>
+<div><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:18px;letter-spacing:-.01em">{{ ag.area }}</div><div style="font-size:14px;line-height:1.5;color:#9aa6bb;margin-top:8px;text-wrap:pretty">{{ ag.does }}</div></div>
+</div>
+</sc-for>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:clamp(32px,5vw,80px);margin-top:clamp(64px,8vw,110px)">
+<div>
+<h3 data-reveal="" style="font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(30px,3.1vw,45px);letter-spacing:-.015em;margin:0">{{ L.k79 }}</h3>
+<p data-reveal="" style="font-size:16px;line-height:1.6;color:#9aa6bb;margin:18px 0 0;max-width:420px">{{ L.k80 }}</p>
+</div>
+<ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border-top:1px solid rgba(243,239,230,.12)">
+<sc-for list="{{ rules }}" as="ru" hint-placeholder-count="8">
+<li data-reveal="" style="display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:18px 0;border-bottom:1px solid rgba(243,239,230,.12);font-size:16px;line-height:1.55;color:#d3d9e3"><span style="font-family:'JetBrains Mono';font-size:13px;color:#e2c286">{{ ru.n }}</span><span style="text-wrap:pretty">{{ ru.text }}</span></li>
+</sc-for>
+</ol>
+</div>
+</div>
+</section>
+
+<section style="background:#f5f1e8;color:#0a1628;padding:clamp(80px,11vw,150px) clamp(18px,4vw,56px)">
+<div style="max-width:1400px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:clamp(40px,6vw,100px)">
+<div>
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a6a2b">{{ L.k81 }}</div>
+<div style="margin-top:32px;border-top:1px solid #0a1628">
+<sc-for list="{{ addrs }}" as="ad" hint-placeholder-count="2">
+<a data-reveal="" href="{{ ad.url }}" target="_blank" style="display:flex;justify-content:space-between;align-items:center;gap:20px;padding:26px 0;border-bottom:1px solid rgba(10,22,40,.2);color:#0a1628;transition:padding .35s cubic-bezier(.16,1,.3,1)" style-hover="padding-left:14px;color:#8a6a2b">
+<div style="min-width:0"><div style="font-family:'Cormorant Garamond';font-weight:500;font-size:clamp(19px,2.1vw,29px);letter-spacing:-.015em;overflow-wrap:anywhere">{{ ad.host }}</div><div style="font-size:15px;line-height:1.5;color:#555d6b;margin-top:8px">{{ ad.what }}</div></div>
+<span style="font-size:22px;flex:none">↗</span>
+</a>
+</sc-for>
+</div>
+</div>
+<div>
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a6a2b">{{ L.k82 }}</div>
+<div data-reveal="" style="margin-top:32px;border-radius:24px;background:#0a1628;color:#d3d9e3;padding:28px;font-family:'JetBrains Mono';font-size:13px;line-height:2;overflow-x:auto">
+<div style="display:flex;gap:7px;margin-bottom:18px"><span style="width:11px;height:11px;border-radius:50%;background:#2d405f"></span><span style="width:11px;height:11px;border-radius:50%;background:#2d405f"></span><span style="width:11px;height:11px;border-radius:50%;background:#2d405f"></span></div>
+<div style="color:#66748c"># local copy of the real shop (server + database in memory, demo data)</div>
+<div><span style="color:#e2c286">$</span> node server/dev.js <span style="color:#66748c"># → http://127.0.0.1:8787</span></div>
+<div style="color:#66748c;margin-top:12px"># tests</div>
+<div><span style="color:#e2c286">$</span> cd supabase &amp;&amp; npm install <span style="color:#66748c"># once: PGlite</span></div>
+<div><span style="color:#e2c286">$</span> cd backend &amp;&amp; npm test<span style="display:inline-block;width:8px;height:15px;background:#e2c286;vertical-align:middle;margin-left:6px;animation:blink 1s steps(1) infinite"></span></div>
+</div>
+<a data-reveal="" href="https://github.com/ganihaknazarov99-netizen/sklad-go" target="_blank" style="display:inline-flex;gap:10px;align-items:center;margin-top:22px;font-weight:600;color:#0a1628;border-bottom:1px solid #0a1628;padding-bottom:3px" style-hover="color:#8a6a2b;border-color:#8a6a2b">ganihaknazarov99-netizen/sklad-go ↗</a>
+</div>
+</div>
+</section>
+
+<footer style="position:relative;background:#c9a45c;color:#0a1628;padding:clamp(80px,10vw,140px) clamp(18px,4vw,56px) 40px;overflow:hidden">
+<div style="max-width:1400px;margin:0 auto;position:relative">
+<div data-reveal="" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase">{{ L.k84 }}</div>
+<a href="https://skladgo.com" target="_blank" data-reveal="" style="display:block;font-family:'Cormorant Garamond';font-weight:600;font-size:clamp(64px,14.6vw,246px);line-height:.85;letter-spacing:-.015em;color:#0a1628;margin-top:24px;transition:letter-spacing .6s cubic-bezier(.16,1,.3,1)" style-hover="letter-spacing:-.015em;color:#0a1628">skladgo.com↗</a>
+<div style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-top:72px;padding-top:24px;border-top:1px solid rgba(10,22,40,.25);font-size:14px">
+<span>{{ L.k85 }}</span>
+<div style="display:flex;gap:24px;flex-wrap:wrap">
+<a href="https://skladgo.com/privacy.html" target="_blank" style="color:#0a1628" style-hover="color:#fff">{{ L.k86 }}</a>
+<a href="https://github.com/ganihaknazarov99-netizen/sklad-go/issues" target="_blank" style="color:#0a1628" style-hover="color:#fff">{{ L.k87 }}</a>
+</div>
+</div>
+</div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    tab: 'stock', dark: true, lang: 'ru', offline: false, pending: 0, syncing: false, toast: '', scanning: false,
+    items: [
+      { id: 1, name: 'Кроссовки', meta: '42 · чёрный', qty: 7, min: 3 },
+      { id: 2, name: 'Футболка', meta: 'M · белый', qty: 2, min: 4 },
+      { id: 3, name: 'Джинсы', meta: '32 · синий', qty: 11, min: 3 },
+      { id: 4, name: 'Куртка', meta: 'L · хаки', qty: 1, min: 2 },
+      { id: 5, name: 'Платье', meta: 'S · красный', qty: 5, min: 2 }
+    ],
+    debts: [
+      { id: 1, name: 'Фарход Р.', total: 600, paid: 250, due: '20.11' },
+      { id: 2, name: 'Мадина С.', total: 320, paid: 270, due: '12.11' },
+      { id: 3, name: 'Рустам К.', total: 1200, paid: 400, due: '01.12' }
+    ],
+    feed: [
+      { text: 'Продажа · Джинсы 32 −1', who: 'Али', time: '10:42', dot: '#c9a45c' },
+      { text: 'Приход · Кроссовки 42 +6', who: 'Хозяин', time: '09:15', dot: '#e2c286' },
+      { text: 'Оплата долга · Мадина +70', who: 'Али', time: 'вчера', dot: '#f59e0b' }
+    ],
+    lock: 'idle', wstep: 0, pageLang: 'en', lockKey: 0, role: 'owner', priv: 'stored'
+  };
+  T = {
+    ru: { stock: 'Склад', debts: 'Долги', feed: 'Лента', restock: 'Что докупить', scan: '▦  Сканер штрихкода', reading: 'Читаю штрихкод…', syncing: 'Синхронизация…', offline: 'Без интернета, сохранено на телефоне', left: 'смн' },
+    tg: { stock: 'Анбор', debts: 'Қарзҳо', feed: 'Тағйирот', restock: 'Чӣ харидан лозим', scan: '▦  Сканери штрих-код', reading: 'Хондани штрих-код…', syncing: 'Ҳамоҳангсозӣ…', offline: 'Бе интернет, дар телефон нигоҳ дошта шуд', left: 'смн' }
+  };
+  now() { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  showToast(msg) { clearTimeout(this._tt); this.setState({ toast: msg }); this._tt = setTimeout(() => this.setState({ toast: '' }), 2600); }
+  log(text, dot) {
+    this.setState(s => ({ feed: [{ text, who: 'Вы', time: this.now(), dot }, ...s.feed].slice(0, 9), pending: s.offline ? s.pending + 1 : s.pending }));
+  }
+  changeQty(id, delta) {
+    const it = this.state.items.find(i => i.id === id);
+    if (delta < 0 && it.qty === 0) return this.showToast('Нет на складе · Out of stock');
+    this.setState(s => ({ items: s.items.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i) }));
+    this.log((delta < 0 ? 'Продажа · ' : 'Приход · ') + it.name + ' ' + it.meta.split(' · ')[0] + ' ' + (delta < 0 ? '−1' : '+1'), delta < 0 ? '#c9a45c' : '#e2c286');
+    if (this.state.offline) this.showToast('Saved on the phone. Will sync when online.');
+  }
+  applyTilt() {
+    const t = this.tiltRef.current; if (!t) return; const sy = Math.min(this._sy || 0, 1400), mx = this._mx || 0, my = this._my || 0;
+    t.style.transform = 'perspective(1400px) translateZ(' + (-sy * 0.25) + 'px) rotateY(' + (mx * 14 - sy * 0.025) + 'deg) rotateX(' + (-my * 10 + sy * 0.035) + 'deg)';
+  }
+  cubes() {
+    if (this._cubes) return this._cubes;
+    const H = [3,2,4,1,2, 2,4,3,2,1, 1,3,4,4,2, 2,1,3,2,3, 0,2,1,3,1]; const S = 56, G = 64, list = [];
+    H.forEach((ht, i) => { const r = Math.floor(i / 5), c = i % 5; for (let z = 0; z < ht; z++) list.push({ x: (c - 2) * G, y: (r - 2) * G, z, r, c, sold: z === ht - 1 && ht >= 4, low: z === ht - 1 && ht === 1 }); });
+    list.sort((a, b) => a.z - b.z || (a.r + a.c) - (b.r + b.c));
+    list.forEach((q, k) => { q.k = k; q.zpx = q.z * S + 420; });
+    return (this._cubes = list);
+  }
+  updateScene(p) {
+    const sc = this.sceneRef.current; if (!sc) return;
+    if (!this._nodes || !this._nodes.length) this._nodes = Array.from(sc.querySelectorAll('[data-cube]')).map(el => ({ el, top: el.querySelector('[data-top]') }));
+    const cl = v => Math.max(0, Math.min(1, v)), ease = t => 1 - Math.pow(1 - t, 3), list = this.cubes(), N = list.length, S = 56;
+    const fit = Math.min(1, window.innerWidth / 1100) * 0.55 + 0.45;
+    sc.style.transform = 'rotateX(' + (60 - 8 * p) + 'deg) rotateZ(' + (-28 - 70 * p) + 'deg) scale(' + ((0.72 + 0.3 * ease(cl(p / 0.45))) * fit) + ')';
+    const pb = cl(p / 0.42), ps = ease(cl((p - 0.48) / 0.16)), pr = cl((p - 0.7) / 0.1);
+    let units = 0;
+    this._nodes.forEach((n, i) => {
+      const q = list[i]; if (!q) return;
+      const t = ease(cl((pb * (N + 6) - q.k) / 6));
+      let z = q.z * S + (1 - t) * 420, x = q.x, op = t;
+      if (q.sold) { z += ps * 380; x += ps * 240; op *= 1 - ps; }
+      n.el.style.transform = 'translate3d(' + x + 'px,' + q.y + 'px,' + z + 'px)'; n.el.style.opacity = op;
+      if (q.low && n.top) { const on = pr > 0.3; n.top.style.backgroundColor = on ? '#f59e0b' : '#e2c286'; n.top.style.boxShadow = on ? 'inset 0 0 0 1px rgba(10,22,40,.25),0 0 40px 6px rgba(245,158,11,.6)' : 'inset 0 0 0 1px rgba(10,22,40,.25)'; }
+      if (t > 0.5 && !(q.sold && ps > 0.5)) units++;
+    });
+    if (this.unitsRef.current) this.unitsRef.current.textContent = units;
+    if (this.wareBarRef.current) this.wareBarRef.current.style.transform = 'scaleY(' + p + ')';
+    const step = p < 0.46 ? 0 : p < 0.68 ? 1 : p < 0.86 ? 2 : 3;
+    if (step !== this.state.wstep) this.setState({ wstep: step });
+  }
+  componentDidMount() {
+    try { const sl = localStorage.getItem('skladgo-page-lang'); if (sl === 'ru' || sl === 'en') this.setPageLang(sl); } catch (e) {}
+    this._clock = setInterval(() => this.forceUpdate(), 30000);
+    const els = Array.from(document.querySelectorAll('[data-reveal]'));
+    const vh = window.innerHeight;
+    this._io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (!e.isIntersecting) return;
+        const el = e.target;
+        const sibs = Array.from(el.parentElement ? el.parentElement.children : []).filter(c => c.hasAttribute('data-reveal'));
+        const idx = Math.max(0, sibs.indexOf(el));
+        setTimeout(() => { el.style.opacity = '1'; el.style.transform = 'none'; }, Math.min(idx, 8) * 70);
+        this._io.unobserve(el);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    els.forEach(el => {
+      if (el.getBoundingClientRect().top < vh) return;
+      el.style.opacity = '0'; el.style.transform = 'perspective(1200px) translateY(60px) rotateX(22deg)'; el.style.transformOrigin = '50% 100%';
+      el.style.transition = (el.style.transition ? el.style.transition + ',' : '') + 'opacity 1.1s cubic-bezier(.16,1,.3,1),transform 1.2s cubic-bezier(.16,1,.3,1)';
+      this._io.observe(el);
+    });
+    const countIO = new IntersectionObserver(entries => entries.forEach(e => {
+      if (!e.isIntersecting) return; const el = e.target; const to = +el.dataset.count; const t0 = performance.now();
+      const step = t => { const k = Math.min(1, (t - t0) / 1600); el.textContent = Math.round(to * (1 - Math.pow(1 - k, 4))); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step); countIO.unobserve(el);
+    }), { threshold: 0.5 });
+    document.querySelectorAll('[data-count]').forEach(el => countIO.observe(el));
+    this._countIO = countIO;
+    if (this.trialRef.current) {
+      this._trialIO = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.style.width = '93%'; } }), { threshold: 0.5 });
+      this._trialIO.observe(this.trialRef.current);
+    }
+    this._onScroll = () => {
+      this._sy = document.documentElement.scrollTop; this.applyTilt();
+      const ws = this.wareRef.current; if (ws) { const r = ws.getBoundingClientRect(); const tot = ws.offsetHeight - window.innerHeight; this.updateScene(Math.max(0, Math.min(1, -r.top / tot))); }
+      const h = document.documentElement; const max = h.scrollHeight - h.clientHeight;
+      if (this.progRef.current) this.progRef.current.style.transform = 'scaleX(' + (max > 0 ? h.scrollTop / max : 0) + ')';
+      const y = h.scrollTop; const el = this.heroTextRef.current;
+      if (el && y < 1200) { el.style.transform = 'translateY(' + (y * 0.18) + 'px)'; el.style.opacity = String(Math.max(0, 1 - y / 900)); }
+    };
+    this._onMove = e => {
+      const g = this.glowRef.current; if (g) g.style.transform = 'translate(' + (e.clientX - 380) + 'px,' + (e.clientY - 380 + window.scrollY * 0) + 'px)';
+      const t = this.tiltRef.current;
+      if (t) { const r = t.getBoundingClientRect(); const dx = (e.clientX - (r.left + r.width / 2)) / window.innerWidth; const dy = (e.clientY - (r.top + r.height / 2)) / window.innerHeight; this._mx = dx; this._my = dy; this.applyTilt(); }
+      const m = this.magRef.current;
+      if (m) { const r = m.getBoundingClientRect(); const dx = e.clientX - (r.left + r.width / 2); const dy = e.clientY - (r.top + r.height / 2); const d = Math.hypot(dx, dy); m.style.transform = d < 120 ? 'translate(' + dx * 0.18 + 'px,' + dy * 0.25 + 'px)' : 'none'; }
+    };
+    window.addEventListener('scroll', this._onScroll, { passive: true });
+    window.addEventListener('mousemove', this._onMove, { passive: true });
+    this._onScroll();
+  }
+  componentWillUnmount() {
+    clearInterval(this._clock); clearTimeout(this._tt); clearTimeout(this._lt);
+    this._io && this._io.disconnect(); this._countIO && this._countIO.disconnect(); this._trialIO && this._trialIO.disconnect();
+    window.removeEventListener('scroll', this._onScroll); window.removeEventListener('mousemove', this._onMove);
+  }
+  progRef = React.createRef(); glowRef = React.createRef(); heroTextRef = React.createRef(); tiltRef = React.createRef(); magRef = React.createRef(); trialRef = React.createRef(); roadRef = React.createRef(); wareRef = React.createRef(); sceneRef = React.createRef(); wareBarRef = React.createRef(); unitsRef = React.createRef();
+
+  D = {"Today":"Сегодня","Access":"Доступ","How it runs":"Как работает","Privacy":"Приватность","Next":"Дальше","Agents":"Агенты","Open skladgo.com":"Открыть skladgo.com","Live · own domain since 6 Nov 2026":"Онлайн · свой домен с 6 ноября 2026","Stock and debt book for a small shop.":"Учёт склада и долгов для маленького магазина.","Phone or computer. Online or offline. Russian and Tajik.":"Телефон или компьютер. С интернетом и без. На русском и таджикском.","What it does":"Что умеет","tests in the suite":"тестов","h":"ч","between backups":"между бэкапами","commits on main":"коммитов в main","ads, trackers, analytics":"рекламы, слежки, счётчиков","units on the shelf":"единиц на полке","Sale in one tap":"Продажа в одно касание","Arrival in one tap":"Приход в одно касание","Sizes and colours":"Размеры и цвета","Electronic debt notebook":"Электронная тетрадь долгов","Works offline":"Работает без интернета","Light and dark":"Светлая и тёмная тема","01 / What it does today":"01 / Что умеет сегодня","A whole shop counter in one phone.":"Весь прилавок — в одном телефоне.","Seven tools. One phone.":"Семь инструментов. Один телефон.","Your debt notebook. Now electronic.":"Тетрадь долгов. Теперь электронная.","Who owes, how much, until when. Once written, it’s locked.":"Кто должен, сколько, до какого числа. Записано — значит закреплено.","Part payments":"Частичные оплаты","Due dates":"Сроки","Buyer sees own debt":"Покупатель видит свой долг","Locked by the database":"Защищено базой данных","+992 •• ••• •• 14 · due 20.11.2026":"+992 •• ••• •• 14 · срок 20.11.2026","REFUSED":"ОТКАЗАНО","Try to change 600 → 60":"Попробуйте изменить 600 → 60","02 / Who sees what":"02 / Кто что видит","The owner decides. The database enforces.":"Решает хозяин. Следит база данных.","Enforced by the database. Tap a role.":"Правила держит сама база. Выберите роль.","Sign-in: Google or email + password.":"Вход: Google или почта + пароль.","The owner also needs a 6-digit code from an authenticator app.":"Хозяину нужен ещё 6-значный код из приложения.","“Sign out on all devices”.":"«Выйти на всех устройствах».","03 / How it runs":"03 / Как это работает","No build step. Merge and it ships.":"Без сборки. Слияние — и готово.","Front end":"Фронтенд","No build step. Offline copy built in.":"Без сборки. Офлайн-копия встроена.","Server":"Сервер","Secure sessions. Live updates. Database rules decide who sees what.":"Защищённые сессии. Живые обновления. Кто что видит — решают правила базы.","Deploys":"Выкладка","Merge to main. Live in 1–3 minutes.":"Слияние в main. В работе через 1–3 минуты.","Domain":"Домен","skladgo.com, served by Vercel.":"skladgo.com, через Vercel.","Backup every 6 hours":"Бэкап каждые 6 часов","Download a copy. Restore anytime.":"Скачайте копию. Восстановите когда угодно.","04 / Privacy · effective 5 November 2026":"04 / Конфиденциальность · с 5 ноября 2026","No ads. No tracking. No analytics.":"Без рекламы. Без слежки. Без счётчиков.","Your data is never sold or shared.":"Ваши данные не продаются и не передаются.","Full policy ↗":"Полная политика ↗","05 / What was missed":"05 / Что упущено","Known gaps, worst first.":"Слабые места, по важности.","Gap #1 · Railway free trial · 6 Nov 2026":"Пункт №1 · пробный период Railway · 6 ноября 2026","days":"дней","left":"осталось","Then the server stops. Fix: Hobby plan, ~$5/month.":"Потом сервер остановится. Решение: тариф Hobby, ~$5 в месяц.","06 / Next update":"06 / Следующее обновление","Stability first.":"Сначала — стабильность.","07 / The agent team":"07 / Команда агентов","An army of AI agents that runs the product.":"Армия ИИ-агентов, которая ведёт продукт.","They build, test and guard the product. The owner runs the shop.":"Они строят, тестируют и охраняют. Хозяин ведёт магазин.","Rules every agent follows":"Правила для каждого агента","Only the owner says “merge”.":"Слово «сливай» говорит только хозяин.","08 / Live addresses":"08 / Рабочие адреса","For developers · Node 22.13+":"Разработчикам · Node 22.13+","Ran on Supabase until 4 Nov 2026. Old “full version” folders are not deployed.":"До 4 ноября 2026 работал на Supabase. Папки старой «полной версии» не выкладываются.","Give this to sellers":"Дайте это продавцам","Questions → GitHub":"Вопросы → GitHub","Owner":"Хозяин","Approved seller":"Продавец","Buyer":"Покупатель","New person":"Новичок","Sees everything. Approves people. Owns the backups.":"Видит всё. Подтверждает людей. Хранит бэкапы.","Sees the shop. Nothing more.":"Видит магазин. И только.","Sees only their own debt.":"Видит только свой долг.","Sees nothing until approved.":"Ничего не видит до подтверждения.","Goods & stock":"Товары и остатки","Deliveries & sales":"Приход и продажи","All debt records":"Все долги","Activity log":"Лента изменений","Approve team":"Подтверждение команды","Own debt only":"Только свой долг","● visible":"● видно","○ hidden":"○ скрыто","What is stored":"Что хранится","Google sign-in":"Вход через Google","Name, email, photo link. Never your password.":"Имя, почта, ссылка на фото. Пароль — никогда.","Email and password":"Почта и пароль","Email plus an encrypted fingerprint. Never the password.":"Почта и зашифрованный отпечаток. Сам пароль — нигде.","Customer details":"Данные покупателя","Name, phone, email — entered by the customer.":"Имя, телефон, почта — вписывает сам покупатель.","Staff details":"Данные сотрудника","Name, phone, email — entered by staff.":"Имя, телефон, почта — вписывает сам сотрудник.","Shop data":"Данные магазина","Goods, stock, sales, deliveries, debts.":"Товары, остатки, продажи, приход, долги.","Who did what, and when.":"Кто что сделал и когда.","Where it is kept":"Где хранится","Railway · United States":"Railway · США","Server and database. Backups: 30 days, plus weekly for 6 months.":"Сервер и база. Копии: 30 дней и по одной в неделю полгода.","Confirms who you are.":"Подтверждает, что вы — это вы.","Serves the pages. Sees only the request.":"Отдаёт страницы. Видит только запрос.","Serves one library. Sees only the request.":"Отдаёт одну библиотеку. Видит только запрос.","Your phone":"Ваш телефон","Offline copy. Erased on sign-out.":"Офлайн-копия. Стирается при выходе.","How to delete":"Как удалить","Your account (staff)":"Аккаунт сотрудника","Team tab → Delete my account.":"«Команда» → «Удалить мой аккаунт».","Your account (customer)":"Аккаунт покупателя","Ask the owner or the developers.":"Попросите хозяина или разработчиков.","Shop records":"Записи магазина","Belong to the shop. Ask the owner.":"Принадлежат магазину. Спросите хозяина.","Everything":"Всё сразу","The owner can wipe the shop in one go.":"Хозяин может удалить все данные магазина.","Who uses it":"Кто пользуется","The shop owner":"Хозяин магазина","Decides who gets in.":"Решает, кого пустить.","Staff":"Сотрудники","The sellers the owner lets in.":"Продавцы, которых пустил хозяин.","Customers":"Покупатели","Buyers who check their own debt.":"Смотрят свой долг.","Questions":"Вопросы","Ask your shop owner, or the developers on GitHub.":"Спросите хозяина или разработчиков на GitHub.","Sizes and colours, counted instantly.":"Размеры и цвета — сразу на учёте.","Logged in the feed.":"Сразу в ленте.","What to restock":"Что докупить","Sent to WhatsApp.":"Отправка в WhatsApp.","Syncs when you’re back.":"Синхронизация, когда интернет вернётся.","○ offline":"○ офлайн","● online":"● онлайн","Online":"Онлайн","Offline":"Офлайн","Internet off. Keep selling, changes stay on the phone.":"Интернета нет. Продавайте — всё сохранится на телефоне.","Saved on the phone. Will sync when online.":"Сохранено на телефоне. Синхронизируем позже.","Nothing to restock.":"Докупать нечего.","database: change refused · record stays 600":"база: изменение отклонено · запись остаётся 600","sending update…":"отправка изменения…","record written 03.11.2026":"запись от 03.11.2026","Client":"Клиент","Phone / browser":"Телефон / браузер","RU · TJ · offline copy":"RU · TJ · офлайн-копия","static files from the repo root":"статические файлы из репозитория","as that user":"от имени пользователя","Service sklad-go":"Сервис sklad-go","Stock with sizes and colours":"Склад с размерами и цветами","One tap in, one tap out.":"Приход и продажа в одно касание.","Camera barcode scanner":"Сканер штрихкодов камерой","Restock list straight to WhatsApp.":"Список «что докупить» — сразу в WhatsApp.","Who owes, how much, until when. Locked once written.":"Кто должен, сколько, до какого числа. Записано — не изменить.","Team":"Команда","You approve sellers. You see every change.":"Вы подтверждаете продавцов. Видите каждое изменение.","Sign-in":"Вход","Google or email. A 6-digit code for the owner.":"Google или почта. Для хозяина — 6-значный код.","Backups every 6 hours":"Бэкапы каждые 6 часов","Syncs when you’re back. Light or dark.":"Синхронизация при подключении. Светлая или тёмная тема.","Railway is on the free trial":"Railway на пробном периоде","≈28 days / $4.91 left on 6 Nov 2026. When it runs out the server stops and the shop can’t sign in. Needs the Hobby plan (~$5/month).":"≈28 дней / $4.91 на 6 ноября 2026. Потом сервер остановится, и в магазин не войти. Нужен тариф Hobby (~$5 в месяц).","No automatic tests on pull requests":"Нет автотестов на pull request","Tests (270+) run only on a laptop; a broken change can reach the live shop.":"Тесты (270+) идут только на ноутбуке — сломанное изменение может попасть в магазин.","Nobody watches the live shop":"Никто не следит за магазином","If the server goes down at night, I find out from a seller.":"Если сервер упадёт ночью, я узнаю от продавца.","Backups live in the same Railway database":"Бэкапы лежат в той же базе Railway","If the Railway project is lost, the copies are lost with it. Need an off-site copy.":"Пропадёт проект Railway — пропадут и копии. Нужна внешняя копия.","Google branding not verified yet":"Бренд в Google ещё не подтверждён","Sign-in screen shows “skladgo.com” instead of the app name and logo; retry from 7 Nov evening.":"На экране входа «skladgo.com» вместо названия и логотипа; повтор с вечера 7 ноября.","Leftovers of the old setup":"Остатки старой схемы","Supabase code paths and CSP entries, the old full version in frontend/, backend/src, deploy/ — confuse people and agents.":"Код Supabase, записи CSP, старая версия в frontend/, backend/src, deploy/ — путают людей и агентов.","No error reports from phones":"Нет отчётов об ошибках с телефонов","When the app breaks on a seller’s phone nobody sees the error.":"Когда приложение ломается у продавца, ошибку никто не видит.","The “Assistant” tab is off":"Вкладка «Ассистент» выключена","It needs a Claude API key on the server, never in the page.":"Нужен ключ Claude API на сервере, а не на странице.","me":"я","QA / back end":"QA / бэкенд","back end":"бэкенд","me + security":"я + безопасность","front / back end":"фронт / бэкенд","front end":"фронтенд","Stability first":"Сначала стабильность","Clean-up":"Чистка","Debt reminders":"Напоминания о долгах","Reports":"Отчёты","Shops for other people":"Магазины для других","Assistant on the server":"Ассистент на сервере","Tests on every PR, uptime alerts, off-site backups, a paid plan.":"Тесты на каждый PR, оповещения о сбоях, внешние копии, платный тариф.","Remove old code. Keep one clear path.":"Убрать старый код. Оставить один понятный путь.","A ready WhatsApp message when a due date passes.":"Готовое сообщение в WhatsApp, когда срок прошёл.","Sales and profit by day, week, month. Export to Excel.":"Продажи и прибыль по дням, неделям, месяцам. Выгрузка в Excel.","Real accounts for friends, not a phone-only warehouse.":"Настоящие аккаунты для друзей, а не склад в одном телефоне.","“What sold best this week?” — answered by Claude.":"«Что лучше продавалось на этой неделе?» — отвечает Claude.","Everything the phone loads":"Всё, что грузит телефон","Screens, offline copy, languages, phone-width layout.":"Экраны, офлайн-копия, языки, вёрстка под телефон.","API, sign-in, database rules, backups, deploy to Railway.":"API, вход, правила базы, бэкапы, выкладка в Railway.","Quality":"Качество","Runs the test suite, writes missing tests, checks screens and live addresses.":"Гоняет тесты, пишет недостающие, проверяет экраны и адреса.","Cybersecurity":"Кибербезопасность","Reviews every change like an attacker, audits headers, sessions, secrets, dependencies.":"Смотрит на каждое изменение глазами взломщика: заголовки, сессии, секреты, зависимости.","Test suite":"Набор тестов","Runs backend/test, knows why it hangs and how a skip lies.":"Запускает backend/test, знает, почему он зависает.","Eyes":"Глаза","Opens the app at phone width and says in words what is wrong.":"Открывает приложение на ширине телефона и говорит, что не так.","Diff review":"Проверка изменений","“What can a dishonest seller do now that they couldn’t before?”":"«Что теперь может нечестный продавец, чего не мог раньше?»","Dictionaries":"Словари","Keeps Russian / Tajik strings complete.":"Следит за полнотой русского и таджикского.","Demo version":"Демо-версия","Carries a change into the demo.":"Переносит изменения в демо.","Live addresses":"Рабочие адреса","Is each address up and serving fresh code.":"Работает ли каждый адрес и свежий ли код.","lead":"ведущий","specialist":"специалист","Branch + pull request. Never merge into main.":"Ветка + pull request. Никогда не сливать в main.","Every change ships with passing tests. Security review for sign-in, roles and debts.":"Каждое изменение — с тестами. Вход, роли и долги — с проверкой безопасности.","No secrets anywhere. No settings changes without the owner.":"Никаких секретов нигде. Настройки — только через хозяина.","Never touch the live database. Test locally.":"Не трогать живую базу. Тестировать локально.","Every label in Russian and Tajik.":"Каждая надпись — на русском и таджикском.","Keep the Google verification file.":"Не удалять файл проверки Google.","Commit only from ganihaknazarov99-netizen.":"Коммиты — только от ganihaknazarov99-netizen.","Report plainly: what changed, how it was checked, what is open.":"Отчёт простыми словами: что изменилось, как проверено, что осталось.","The real shop. Give this to sellers.":"Настоящий магазин. Дайте это продавцам.","Old address. Still works.":"Старый адрес. Работает.","For friends: their own warehouse, on their phone.":"Для друзей: свой склад на своём телефоне."};
+  LK = {"k0":{"en":"Today","ru":"Сегодня"},"k1":{"en":"Access","ru":"Доступ"},"k2":{"en":"How it runs","ru":"Как работает"},"k3":{"en":"Privacy","ru":"Приватность"},"k4":{"en":"Next","ru":"Дальше"},"k5":{"en":"Agents","ru":"Агенты"},"k6":{"en":"Open skladgo.com","ru":"Открыть skladgo.com"},"k7":{"en":"Live · own domain since 6 Nov 2026","ru":"Онлайн · свой домен с 6 ноября 2026"},"k8":{"en":"Stock and debt book for a small shop.","ru":"Учёт склада и долгов для маленького магазина."},"k9":{"en":"Phone or computer. Online or offline. Russian and Tajik.","ru":"Телефон или компьютер. С интернетом и без. На русском и таджикском."},"k10":{"en":"Start your warehouse","ru":"Начать свой склад"},"k11":{"en":"What it does","ru":"Что умеет"},"k12":{"en":"tests in the suite","ru":"тестов"},"k13":{"en":"h","ru":"ч"},"k14":{"en":"between backups","ru":"между бэкапами"},"k15":{"en":"commits on main","ru":"коммитов в main"},"k16":{"en":"ads, trackers, analytics","ru":"рекламы, слежки, счётчиков"},"k17":{"en":"Demo · tap anything · data stays in this page","ru":"Демо · нажимайте что угодно · данные остаются на странице"},"k18":{"en":"Warehouse in 3D · scroll","ru":"Склад в 3D · листайте"},"k19":{"en":"units on the shelf","ru":"единиц на полке"},"k20":{"en":"Sale in one tap","ru":"Продажа в одно касание"},"k21":{"en":"Arrival in one tap","ru":"Приход в одно касание"},"k22":{"en":"Sizes and colours","ru":"Размеры и цвета"},"k23":{"en":"Electronic debt notebook","ru":"Электронная тетрадь долгов"},"k24":{"en":"Works offline","ru":"Работает без интернета"},"k25":{"en":"Light and dark","ru":"Светлая и тёмная тема"},"k26":{"en":"Sale in one tap","ru":"Продажа в одно касание"},"k27":{"en":"Arrival in one tap","ru":"Приход в одно касание"},"k28":{"en":"Sizes and colours","ru":"Размеры и цвета"},"k29":{"en":"Electronic debt notebook","ru":"Электронная тетрадь долгов"},"k30":{"en":"Works offline","ru":"Работает без интернета"},"k31":{"en":"Light and dark","ru":"Светлая и тёмная тема"},"k32":{"en":"01 / What it does today","ru":"01 / Что умеет сегодня"},"k33":{"en":"A whole shop counter in one phone.","ru":"Весь прилавок — в одном телефоне."},"k34":{"en":"Seven tools. One phone.","ru":"Семь инструментов. Один телефон."},"k35":{"en":"Electronic debt notebook","ru":"Электронная тетрадь долгов"},"k36":{"en":"Your debt notebook. Now electronic.","ru":"Тетрадь долгов. Теперь электронная."},"k37":{"en":"Who owes, how much, until when. Once written, it’s locked.","ru":"Кто должен, сколько, до какого числа. Записано — значит закреплено."},"k38":{"en":"Part payments","ru":"Частичные оплаты"},"k39":{"en":"Due dates","ru":"Сроки"},"k40":{"en":"Buyer sees own debt","ru":"Покупатель видит свой долг"},"k41":{"en":"Locked by the database","ru":"Защищено базой данных"},"k42":{"en":"Debt record","ru":"Запись о долге"},"k43":{"en":"+992 •• ••• •• 14 · due 20.11.2026","ru":"+992 •• ••• •• 14 · срок 20.11.2026"},"k44":{"en":"REFUSED","ru":"ОТКАЗАНО"},"k45":{"en":"Try to change 600 → 60","ru":"Попробуйте изменить 600 → 60"},"k46":{"en":"02 / Who sees what","ru":"02 / Кто что видит"},"k47":{"en":"The owner decides. The database enforces.","ru":"Решает хозяин. Следит база данных."},"k48":{"en":"Enforced by the database. Tap a role.","ru":"Правила держит сама база. Выберите роль."},"k49":{"en":"Sign-in: Google or email + password.","ru":"Вход: Google или почта + пароль."},"k50":{"en":"The owner also needs a 6-digit code from an authenticator app.","ru":"Хозяину нужен ещё 6-значный код из приложения."},"k51":{"en":"“Sign out on all devices”.","ru":"«Выйти на всех устройствах»."},"k52":{"en":"03 / How it runs","ru":"03 / Как это работает"},"k53":{"en":"No build step. Merge and it ships.","ru":"Без сборки. Слияние — и готово."},"k54":{"en":"Front end","ru":"Фронтенд"},"k55":{"en":"No build step. Offline copy built in.","ru":"Без сборки. Офлайн-копия встроена."},"k56":{"en":"Server","ru":"Сервер"},"k57":{"en":"Secure sessions. Live updates. Database rules decide who sees what.","ru":"Защищённые сессии. Живые обновления. Кто что видит — решают правила базы."},"k58":{"en":"Deploys","ru":"Выкладка"},"k59":{"en":"Merge to main. Live in 1–3 minutes.","ru":"Слияние в main. В работе через 1–3 минуты."},"k60":{"en":"Domain","ru":"Домен"},"k61":{"en":"skladgo.com, served by Vercel.","ru":"skladgo.com, через Vercel."},"k62":{"en":"Backup every 6 hours","ru":"Бэкап каждые 6 часов"},"k63":{"en":"Download a copy. Restore anytime.","ru":"Скачайте копию. Восстановите когда угодно."},"k64":{"en":"04 / Privacy · effective 5 November 2026","ru":"04 / Конфиденциальность · с 5 ноября 2026"},"k65":{"en":"No ads. No tracking. No analytics.","ru":"Без рекламы. Без слежки. Без счётчиков."},"k66":{"en":"Your data is never sold or shared.","ru":"Ваши данные не продаются и не передаются."},"k67":{"en":"Full policy ↗","ru":"Полная политика ↗"},"k68":{"en":"05 / What was missed","ru":"05 / Что упущено"},"k69":{"en":"Known gaps, worst first.","ru":"Слабые места, по важности."},"k70":{"en":"Gap #1 · Railway free trial · 6 Nov 2026","ru":"Пункт №1 · пробный период Railway · 6 ноября 2026"},"k71":{"en":"days","ru":"дней"},"k72":{"en":"left","ru":"осталось"},"k73":{"en":"Then the server stops. Fix: Hobby plan, ~$5/month.","ru":"Потом сервер остановится. Решение: тариф Hobby, ~$5 в месяц."},"k74":{"en":"06 / Next update","ru":"06 / Следующее обновление"},"k75":{"en":"Stability first.","ru":"Сначала — стабильность."},"k76":{"en":"07 / The agent team","ru":"07 / Команда агентов"},"k77":{"en":"An army of AI agents that runs the product.","ru":"Армия ИИ-агентов, которая ведёт продукт."},"k78":{"en":"They build, test and guard the product. The owner runs the shop.","ru":"Они строят, тестируют и охраняют. Хозяин ведёт магазин."},"k79":{"en":"Rules every agent follows","ru":"Правила для каждого агента"},"k80":{"en":"Only the owner says “merge”.","ru":"Слово «сливай» говорит только хозяин."},"k81":{"en":"08 / Live addresses","ru":"08 / Рабочие адреса"},"k82":{"en":"For developers · Node 22.13+","ru":"Разработчикам · Node 22.13+"},"k83":{"en":"Ran on Supabase until 4 Nov 2026. Old “full version” folders are not deployed.","ru":"До 4 ноября 2026 работал на Supabase. Папки старой «полной версии» не выкладываются."},"k84":{"en":"Give this to sellers","ru":"Дайте это продавцам"},"k85":{"en":"Sklad Go · Stock and debt book for a small shop","ru":"Sklad Go · Учёт склада и долгов для маленького магазина"},"k86":{"en":"Privacy","ru":"Конфиденциальность"},"k87":{"en":"Questions → GitHub","ru":"Вопросы → GitHub"}};
+  setPageLang(l) { this.setState({ pageLang: l }); try { localStorage.setItem('skladgo-page-lang', l); } catch (e) {} document.documentElement.lang = l; }
+  renderVals() {
+    const v = this.renderValsBase(); const ru = this.state.pageLang === 'ru'; const D = this.D;
+    const tr = x => (typeof x === 'string' && ru && D[x]) ? D[x] : x;
+    ['features','roles','blocks','privTabs','privItems','gaps','roadmap','agents','rules','addrs','wareSteps','arch'].forEach(k => { if (Array.isArray(v[k])) v[k] = v[k].map(o => { const c = { ...o }; for (const f in c) if (typeof c[f] === 'string') c[f] = tr(c[f]); return c; }); });
+    ['roleText','lockMsg','netLabel','netBtn','toast'].forEach(k => { v[k] = tr(v[k]); });
+    const L = {}; for (const k in this.LK) L[k] = this.LK[k][ru ? 'ru' : 'en']; v.L = L;
+    v.setEn = () => this.setPageLang('en'); v.setRu = () => this.setPageLang('ru');
+    v.enBg = ru ? 'transparent' : '#c9a45c'; v.enFg = ru ? '#9aa6bb' : '#0a1628'; v.ruBg = ru ? '#c9a45c' : 'transparent'; v.ruFg = ru ? '#0a1628' : '#9aa6bb';
+    return v;
+  }
+  renderValsBase() {
+    const s = this.state; const t = this.T[s.lang];
+    const p = s.dark ? { bg: '#0d1a2f', card: '#16263f', line: '#243756', text: '#f3efe6', muted: '#8693a8' } : { bg: '#f6f3ec', card: '#ffffff', line: '#e3ded2', text: '#0a1628', muted: '#6b7a75' };
+    const tabKeys = ['stock', 'debts', 'feed'];
+    const items = s.items.map(i => {
+      const low = i.qty < i.min;
+      return { ...i, border: low ? 'rgba(245,158,11,.55)' : p.line, qtyColor: i.qty === 0 ? '#f43f5e' : low ? '#f59e0b' : p.text,
+        sell: () => this.changeQty(i.id, -1), add: () => this.changeQty(i.id, 1) };
+    });
+    const lowList = s.items.filter(i => i.qty < i.min);
+    const debts = s.debts.map(d => {
+      const left = d.total - d.paid; const done = left <= 0;
+      return { name: d.name, left: done ? 'оплачено' : left + ' ' + t.left, color: done ? '#c9a45c' : '#f59e0b', meta: 'срок ' + d.due + ' · всего ' + d.total + ' ' + t.left,
+        pct: Math.round(d.paid / d.total * 100), paidLine: '⌁ locked · ' + d.paid + '/' + d.total, btn: done ? '✓' : '+50', btnBg: done ? '#8693a8' : '#c9a45c',
+        pay: () => { if (done) return; this.setState(st => ({ debts: st.debts.map(x => x.id === d.id ? { ...x, paid: Math.min(x.total, x.paid + 50) } : x) })); this.log('Оплата долга · ' + d.name + ' +50', '#f59e0b'); } };
+    });
+
+    const roleDefs = {
+      owner: { label: 'Owner', see: ['stock', 'history', 'debts', 'feed', 'team', 'backup'], text: 'Sees everything. Approves people. Owns the backups.' },
+      staff: { label: 'Approved seller', see: ['stock', 'history', 'debts', 'feed'], text: 'Sees the shop. Nothing more.' },
+      customer: { label: 'Buyer', see: ['own'], text: 'Sees only their own debt.' },
+      pending: { label: 'New person', see: [], text: 'Sees nothing until approved.' }
+    };
+    const blockDefs = [['stock', 'Goods & stock'], ['history', 'Deliveries & sales'], ['debts', 'All debt records'], ['feed', 'Activity log'], ['team', 'Approve team'], ['own', 'Own debt only']];
+    const rd = roleDefs[s.role];
+    const blocks = blockDefs.map(([k, name]) => {
+      const on = rd.see.includes(k) || (k === 'own' && s.role !== 'pending' && s.role !== 'customer' ? false : rd.see.includes(k));
+      const visible = rd.see.includes(k);
+      return { name, state: visible ? '● visible' : '○ hidden', op: visible ? 1 : 0.32, sc: visible ? 1 : 0.96,
+        bg: visible ? '#c9a45c' : 'transparent', border: visible ? '#c9a45c' : 'rgba(243,239,230,.14)', fg: visible ? '#0a1628' : '#66748c', tag: visible ? '#0a1628' : '#66748c' };
+    });
+    const roles = Object.keys(roleDefs).map(k => ({ label: roleDefs[k].label, go: () => this.setState({ role: k }),
+      bg: s.role === k ? '#f3efe6' : 'transparent', fg: s.role === k ? '#0a1628' : '#f3efe6', border: s.role === k ? '#f3efe6' : 'rgba(243,239,230,.22)' }));
+
+    const priv = {
+      stored: { label: 'What is stored', items: [
+        ['Google sign-in', 'Name, email, photo link. Never your password.'],
+        ['Email and password', 'Email plus an encrypted fingerprint. Never the password.'],
+        ['Customer details', 'Name, phone, email — entered by the customer.'],
+        ['Staff details', 'Name, phone, email — entered by staff.'],
+        ['Shop data', 'Goods, stock, sales, deliveries, debts.'],
+        ['Activity log', 'Who did what, and when.']] },
+      where: { label: 'Where it is kept', items: [
+        ['Railway · United States', 'Server and database. Backups: 30 days, plus weekly for 6 months.'],
+        ['Google', 'Confirms who you are.'],
+        ['Vercel', 'Serves the pages. Sees only the request.'],
+        ['jsDelivr', 'Serves one library. Sees only the request.'],
+        ['Your phone', 'Offline copy. Erased on sign-out.']] },
+      delete: { label: 'How to delete', items: [
+        ['Your account (staff)', 'Team tab → Delete my account.'],
+        ['Your account (customer)', 'Ask the owner or the developers.'],
+        ['Shop records', 'Belong to the shop. Ask the owner.'],
+        ['Everything', 'The owner can wipe the shop in one go.']] },
+      who: { label: 'Who uses it', items: [
+        ['The shop owner', 'Decides who gets in.'],
+        ['Staff', 'The sellers the owner lets in.'],
+        ['Customers', 'Buyers who check their own debt.'],
+        ['Questions', 'Ask your shop owner, or the developers on GitHub.']] }
+    };
+    const privTabs = Object.keys(priv).map(k => ({ label: priv[k].label, go: () => this.setState({ priv: k }), bg: s.priv === k ? '#0a1628' : 'transparent', fg: s.priv === k ? '#f5f1e8' : '#0a1628' }));
+    const privItems = priv[s.priv].items.map(([title, body], i) => ({ title, body, delay: (i * 60) + 'ms' }));
+
+    const scrollRoad = dir => { const el = this.roadRef.current; if (el) el.scrollBy({ left: dir * 396, behavior: 'smooth' }); };
+
+    return {
+      progRef: this.progRef, glowRef: this.glowRef, heroTextRef: this.heroTextRef, tiltRef: this.tiltRef, magRef: this.magRef, trialRef: this.trialRef, roadRef: this.roadRef, wareRef: this.wareRef, sceneRef: this.sceneRef, wareBarRef: this.wareBarRef, unitsRef: this.unitsRef, cubes: this.cubes(),
+      wareSteps: [['01','Приход','Arrival in one tap','Sizes and colours, counted instantly.'],['02','Продажа','Sale in one tap','Logged in the feed.'],['03','Докупить','What to restock','Sent to WhatsApp.'],['04','Офлайн','Works offline','Syncs when you’re back.']].map(([n,k,title,body],i)=>({n,k,title,body,op:s.wstep===i?1:0,ty:s.wstep===i?0:(s.wstep>i?-30:30)})),
+      tapeLines: (() => { const base = ['10:42  ПРОДАЖА   Джинсы 32      −1', '10:39  ПРИХОД    Кроссовки 42   +6', '10:31  ДОЛГ      Фарход Р.    600', '10:24  ОПЛАТА    Мадина С.     +70', '10:18  ПРОДАЖА   Футболка M     −2', '10:05  СКАН      4600123456789  +1', '09:58  ПРОДАЖА   Платье S       −1', '09:47  ДОКУПИТЬ  → WhatsApp     3', '09:40  ПРИХОД    Куртка L       +4', '09:31  СИНХР.    offline → 4 ok', '09:22  ВХОД      seller approved', '09:15  БЭКАП     every 6h       ✓']; return base.concat(base, base, base); })(),
+      p, clock: this.now(), t,
+      netLabel: s.offline ? '○ offline' : '● online', netColor: s.offline ? '#f59e0b' : '#e2c286', netBtn: s.offline ? 'Online' : 'Offline',
+      themeIcon: s.dark ? '☀' : '☾', langLabel: s.lang === 'ru' ? 'RU' : 'TJ',
+      toggleLang: () => this.setState({ lang: s.lang === 'ru' ? 'tg' : 'ru' }),
+      toggleTheme: () => this.setState({ dark: !s.dark }),
+      toggleNet: () => {
+        if (!s.offline) { this.setState({ offline: true }); this.showToast('Internet off. Keep selling, changes stay on the phone.'); return; }
+        const n = s.pending; this.setState({ offline: false, syncing: true });
+        setTimeout(() => { this.setState({ syncing: false, pending: 0 }); this.showToast('Synced ' + n + ' change(s) with the server.'); }, 1500);
+      },
+      syncing: s.syncing, offline: s.offline, pending: s.pending,
+      tabX: tabKeys.indexOf(s.tab) * 100,
+      tabs: tabKeys.map(k => ({ label: t[k], fg: s.tab === k ? '#0a1628' : p.muted, go: () => this.setState({ tab: k }) })),
+      isStock: s.tab === 'stock', isDebts: s.tab === 'debts', isFeed: s.tab === 'feed',
+      items, debts, feed: s.feed, lowCount: lowList.length,
+      sendRestock: () => this.showToast(lowList.length ? 'WhatsApp: «Докупить: ' + lowList.map(i => i.name + ' ' + i.meta).join(', ') + '»' : 'Nothing to restock.'),
+      scanItem: () => {
+        this.setState({ scanning: true });
+        setTimeout(() => { const it = s.items[Math.floor(Math.random() * s.items.length)]; this.setState({ scanning: false }); this.changeQty(it.id, 1); this.showToast('Barcode read → ' + it.name + ' ' + it.meta + ' +1'); }, 1700);
+      },
+      hasToast: !!s.toast, toast: s.toast, scanning: s.scanning,
+
+      lockKey: s.lockKey, lockTyping: s.lock === 'trying', lockRefused: s.lock === 'refused',
+      lockAnim: s.lock === 'refused' ? 'shake .6s cubic-bezier(.36,.07,.19,.97) both' : 'none',
+      lockStrike: s.lock === 'trying' ? 'line-through' : 'none',
+      lockMsg: s.lock === 'refused' ? 'database: change refused · record stays 600' : s.lock === 'trying' ? 'sending update…' : 'record written 03.11.2026',
+      lockMsgColor: s.lock === 'refused' ? '#f43f5e' : '#9aa6bb',
+      tryEdit: () => { clearTimeout(this._lt); this.setState({ lock: 'trying', lockKey: s.lockKey + 1 }); this._lt = setTimeout(() => this.setState(st => ({ lock: 'refused', lockKey: st.lockKey + 1 })), 1000); },
+
+      features: [
+        { n: '01', title: 'Stock with sizes and colours', body: 'One tap in, one tap out.' },
+        { n: '02', title: 'Camera barcode scanner', body: 'Restock list straight to WhatsApp.' },
+        { n: '03', title: 'Electronic debt notebook', body: 'Who owes, how much, until when. Locked once written.' },
+        { n: '04', title: 'Team', body: 'You approve sellers. You see every change.' },
+        { n: '05', title: 'Sign-in', body: 'Google or email. A 6-digit code for the owner.' },
+        { n: '06', title: 'Backups every 6 hours', body: 'Download a copy. Restore anytime.' },
+        { n: '07', title: 'Works offline', body: 'Syncs when you’re back. Light or dark.' }
+      ],
+      roles, blocks, roleText: rd.text,
+      arch: [
+        { tag: 'Client', name: 'Phone / browser', note: 'RU · TJ · offline copy', bg: '#111f38', border: 'rgba(243,239,230,.12)', link: 'https', delay: '0s', delay2: '.9s' },
+        { tag: 'Vercel', name: 'skladgo.com', note: 'static files from the repo root', bg: '#111f38', border: 'rgba(243,239,230,.12)', link: '/api/* · /auth/* rewrite', delay: '.3s', delay2: '1.2s' },
+        { tag: 'Railway', name: 'Service sklad-go', note: 'server/ · Node · npm start', bg: '#111f38', border: 'rgba(243,239,230,.12)', link: 'as that user', delay: '.6s', delay2: '1.5s' },
+        { tag: 'Railway', name: 'Postgres', note: 'rules: supabase/schema.sql (RLS)', bg: '#132a4a', border: 'rgba(226,194,134,.4)', link: '' }
+      ],
+      privTabs, privItems, privKey: s.priv,
+      gaps: [
+        { n: '01', gap: 'Railway is on the free trial', why: '≈28 days / $4.91 left on 6 Nov 2026. When it runs out the server stops and the shop can’t sign in. Needs the Hobby plan (~$5/month).', owner: 'me' },
+        { n: '02', gap: 'No automatic tests on pull requests', why: 'Tests (270+) run only on a laptop; a broken change can reach the live shop.', owner: 'QA' },
+        { n: '03', gap: 'Nobody watches the live shop', why: 'If the server goes down at night, I find out from a seller.', owner: 'QA / back end' },
+        { n: '04', gap: 'Backups live in the same Railway database', why: 'If the Railway project is lost, the copies are lost with it. Need an off-site copy.', owner: 'back end' },
+        { n: '05', gap: 'Google branding not verified yet', why: 'Sign-in screen shows “skladgo.com” instead of the app name and logo; retry from 7 Nov evening.', owner: 'me + security' },
+        { n: '06', gap: 'Leftovers of the old setup', why: 'Supabase code paths and CSP entries, the old full version in frontend/, backend/src, deploy/ — confuse people and agents.', owner: 'front / back end' },
+        { n: '07', gap: 'No error reports from phones', why: 'When the app breaks on a seller’s phone nobody sees the error.', owner: 'front end' },
+        { n: '08', gap: 'The “Assistant” tab is off', why: 'It needs a Claude API key on the server, never in the page.', owner: 'back end' }
+      ],
+      roadmap: [
+        { n: '01', title: 'Stability first', body: 'Tests on every PR, uptime alerts, off-site backups, a paid plan.' },
+        { n: '02', title: 'Clean-up', body: 'Remove old code. Keep one clear path.' },
+        { n: '03', title: 'Debt reminders', body: 'A ready WhatsApp message when a due date passes.' },
+        { n: '04', title: 'Reports', body: 'Sales and profit by day, week, month. Export to Excel.' },
+        { n: '05', title: 'Shops for other people', body: 'Real accounts for friends, not a phone-only warehouse.' },
+        { n: '06', title: 'Assistant on the server', body: '“What sold best this week?” — answered by Claude.' }
+      ].map((r, i) => ({ ...r, bg: i === 0 ? '#c9a45c' : '#0f1c33', fg: i === 0 ? '#0a1628' : '#f3efe6', stroke: i === 0 ? '#0a1628' : '#e2c286' })),
+      roadPrev: () => scrollRoad(-1), roadNext: () => scrollRoad(1),
+      agents: [
+        ['frontend-developer', 'lead', 'Everything the phone loads', 'Screens, offline copy, languages, phone-width layout.'],
+        ['backend-developer', 'lead', 'server/ · schema.sql', 'API, sign-in, database rules, backups, deploy to Railway.'],
+        ['qa-engineer', 'lead', 'Quality', 'Runs the test suite, writes missing tests, checks screens and live addresses.'],
+        ['security-engineer', 'lead', 'Cybersecurity', 'Reviews every change like an attacker, audits headers, sessions, secrets, dependencies.'],
+        ['tester', 'specialist', 'Test suite', 'Runs backend/test, knows why it hangs and how a skip lies.'],
+        ['screen-check', 'specialist', 'Eyes', 'Opens the app at phone width and says in words what is wrong.'],
+        ['guard', 'specialist', 'Diff review', '“What can a dishonest seller do now that they couldn’t before?”'],
+        ['languages', 'specialist', 'Dictionaries', 'Keeps Russian / Tajik strings complete.'],
+        ['mirror-demo', 'specialist', 'Demo version', 'Carries a change into the demo.'],
+        ['deploy-check', 'specialist', 'Live addresses', 'Is each address up and serving fresh code.']
+      ].map(([name, kind, area, does]) => ({ name, kind, area, does, bg: kind === 'lead' ? '#111f38' : 'transparent', border: kind === 'lead' ? 'rgba(226,194,134,.3)' : 'rgba(243,239,230,.1)', kindColor: kind === 'lead' ? '#e2c286' : '#66748c' })),
+      rules: [
+        'Branch + pull request. Never merge into main.',
+        'Every change ships with passing tests. Security review for sign-in, roles and debts.',
+        'No secrets anywhere. No settings changes without the owner.',
+        'Never touch the live database. Test locally.',
+        'Every label in Russian and Tajik.',
+        'Keep the Google verification file.',
+        'Commit only from ganihaknazarov99-netizen.',
+        'Report plainly: what changed, how it was checked, what is open.'
+      ].map((text, i) => ({ n: String(i + 1).padStart(2, '0'), text })),
+      addrs: [
+        { url: 'https://skladgo.com', host: 'skladgo.com', what: 'The real shop. Give this to sellers.' },
+        { url: 'https://sklad-go-gani26.vercel.app', host: 'sklad-go-gani26.vercel.app', what: 'For friends: their own warehouse, on their phone.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
