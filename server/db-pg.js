@@ -18,6 +18,9 @@ function createPg(url) {
       const c = await pool.connect();
       try {
         await c.query('begin');
+        // Запрос человека дольше 10 секунд база обрывает сама: один тяжёлый запрос
+        // не займёт соединение (их всего 10) и не повесит лавку остальным
+        await c.query("set local statement_timeout = '10s'");
         await c.query('set local role authenticated');
         await c.query("select set_config('request.jwt.claim.sub', $1, true)", [uid]);
         const r = await fn((sql, params) => c.query(sql, params).then((x) => x.rows));
