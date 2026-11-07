@@ -27,7 +27,11 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(fresh(r));
 });
 
-// Сначала сеть; не ответила вовремя или ответила ошибкой — копия. Ответ сети в копию кладём в любом случае
+// Сначала сеть; не ответила вовремя или ответила ошибкой — копия. Ответ сети в копию кладём в любом случае.
+// Перенаправление — не ошибка: сервер говорит «тебе туда» (skladgo.com с 7 ноября 2026 ведёт на
+// страницу о складе). Раньше копия считала его ошибкой и показывала сохранённый склад — и на
+// телефоне, где склад уже открывали, новая страница не появлялась никогда
+const дальше = (res) => res.ok || res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400);
 function fresh(r) {
   const net = fetch(r).then((res) => {
     if (res && res.ok && res.type === 'basic') { const c = res.clone(); caches.open(V).then((cache) => cache.put(r, c)); }
@@ -40,7 +44,7 @@ function fresh(r) {
     const t = setTimeout(() => { saved().then((hit) => { if (hit && !over) { over = true; done(hit); } }); }, WAIT);
     net.then((res) => {
       if (over) return;
-      if (res.ok) { over = true; clearTimeout(t); done(res); return; }
+      if (дальше(res)) { over = true; clearTimeout(t); done(res); return; }
       saved().then((hit) => { if (!over) { over = true; clearTimeout(t); done(hit || res); } });
     }, () => {
       saved().then((hit) => { if (!over) { over = true; clearTimeout(t); done(hit || new Response('Нет связи', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })); } });

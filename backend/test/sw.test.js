@@ -88,3 +88,14 @@ test('запросы к Supabase и прочие чужие идут мимо к
   слушатели.fetch({ request: { ...запрос('/app.js'), method: 'POST' }, respondWith: () => { перехвачено = true; } });
   assert.equal(перехвачено, false, 'запись не перехватываем');
 });
+
+test('перенаправление сервера — не ошибка: идём куда сказали, а не в сохранённый склад', async () => {
+  // skladgo.com с 7 ноября 2026 перенаправляет корень на /about. Для перехода страницы браузер
+  // даёт копии «opaqueredirect»: ok у него false. Раньше копия отдавала вместо него старый склад
+  const перенаправление = () => { const r = new Response(null, { status: 200 }); Object.defineProperty(r, 'type', { value: 'opaqueredirect' }); Object.defineProperty(r, 'ok', { value: false }); return r; };
+  const { ctx, положено } = песочница({ сеть: () => Promise.resolve(перенаправление()), копия: { '/': ответ('старый склад') } });
+  const r = await ctx.fresh(запрос('/', 'navigate'));
+  assert.equal(r.type, 'opaqueredirect', 'браузер сам пойдёт по перенаправлению');
+  await new Promise((d) => setImmediate(d));
+  assert.deepEqual(Object.keys(положено), [], 'перенаправление в копию не кладём');
+});

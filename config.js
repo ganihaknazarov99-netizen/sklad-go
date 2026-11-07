@@ -41,5 +41,14 @@
     else if (/[?&]mock\b/.test(location.search)) localStorage.setItem('skladgo.mockmode', '1');
     mock = localStorage.getItem('skladgo.mockmode') === '1';
   } catch (e) {}
+  // skladgo.com с 7 ноября 2026 — страница о складе, а склад — на app.skladgo.com. Телефон, где
+  // склад уже открывали по skladgo.com, мог показать сохранённую копию склада: уводим на страницу.
+  // Кроме случая, когда на телефоне есть неотправленное: тогда склад сначала дошлёт своё
+  try {
+    if (location.hostname === 'skladgo.com' && location.pathname === '/' &&
+        localStorage.getItem('skladgo.dirty.main') !== '1' && localStorage.getItem('skladgo.dirty.debts') !== '1') {
+      location.replace('/about');
+    }
+  } catch (e) {}
   window.SKLAD_CONFIG = МАГАЗИН[location.hostname] || (mock ? { mock: true } : { url: '', anonKey: '' });
 })();
