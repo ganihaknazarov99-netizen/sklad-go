@@ -72,3 +72,22 @@ test('skladgo.com ведёт на страницу о складе, склад �
 
   assert.match(read('server/index.js'), /const АДРЕСА = \[[^\]]*'https:\/\/app\.skladgo\.com'/, 'сервер пускает вход и запись с app.skladgo.com');
 });
+
+function config(host, pathname, store) {
+  let куда = null;
+  const ctx = { location: { hostname: host, pathname, search: '', replace: (u) => { куда = u; } },
+    localStorage: { getItem: (k) => (store || {})[k] ?? null, setItem() {}, removeItem() {} } };
+  ctx.window = ctx;
+  require('node:vm').createContext(ctx);
+  require('node:vm').runInContext(read('config.js'), ctx);
+  return куда;
+}
+
+test('сохранённая копия склада на skladgo.com уводит на страницу, если всё отправлено', () => {
+  assert.equal(config('skladgo.com', '/'), '/about');
+  assert.equal(config('skladgo.com', '/', { 'skladgo.dirty.main': '1' }), null, 'неотправленный склад — сначала дошлём');
+  assert.equal(config('skladgo.com', '/', { 'skladgo.dirty.debts': '1' }), null, 'неотправленные долги — тоже');
+  assert.equal(config('skladgo.com', '/index.html'), null, 'склад по прямому адресу открыть можно');
+  assert.equal(config('app.skladgo.com', '/'), null);
+  assert.equal(config('skladgo.vercel.app', '/'), null);
+});
