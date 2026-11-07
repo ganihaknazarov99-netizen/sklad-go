@@ -12,14 +12,15 @@ missed, what the next update is, and who does what.
 
 | Address | What it is |
 |---|---|
-| **https://skladgo.com** | the real shop (own domain, since 6 Nov 2026) — give this to sellers |
+| **https://app.skladgo.com** | the real shop — give this to sellers (since 7 Nov 2026) |
+| https://skladgo.com | the introduction page (opens skladgo.com/about) |
 | https://skladgo.vercel.app | the same shop, old address — keeps working (phones that saved it) |
 | https://sklad-go-gani26.vercel.app | link for friends: sign up first, then their own empty warehouse on their phone only |
 
 ## How it runs
 
 ```
-phone / browser ──► Vercel (skladgo.com)            static files from the repo root
+phone / browser ──► Vercel (app.skladgo.com)        static files from the repo root
                       │  /api/*, /auth/*  (rewrite, vercel.json)
                       ▼
                     Railway: service sklad-go        server/  (Node, npm start)

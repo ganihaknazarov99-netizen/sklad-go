@@ -55,3 +55,20 @@ test('правила: склад строгий, странице о склад�
     assert.ok(оНас.headers.some((h) => h.key === k), k);
   }
 });
+
+/* С 7 ноября 2026 сам skladgo.com — страница о складе (хозяин: «на моём адресе — новая
+   страница»), а склад — на app.skladgo.com. Прежний skladgo.vercel.app — склад, как был. */
+test('skladgo.com ведёт на страницу о складе, склад — на app.skladgo.com', () => {
+  const r = (vercel.redirects || []).find((x) => x.source === '/');
+  assert.ok(r, 'есть перенаправление корня');
+  assert.deepEqual(r.has, [{ type: 'host', value: 'skladgo.com' }], 'только для skladgo.com: на остальных адресах в корне склад');
+  assert.equal(r.destination, '/about');
+  assert.equal(r.permanent, false, 'временное: браузеры не запомнят навсегда');
+
+  const html = read('about/index.html');
+  assert.doesNotMatch(html, /href="https:\/\/skladgo\.com"/, 'кнопки склада не ведут обратно на страницу');
+  assert.equal((html.match(/href="https:\/\/app\.skladgo\.com"/g) || []).length, 3, 'шапка, «начать», подвал');
+  assert.match(html, /url: 'https:\/\/app\.skladgo\.com', host: 'app\.skladgo\.com'/);
+
+  assert.match(read('server/index.js'), /const АДРЕСА = \[[^\]]*'https:\/\/app\.skladgo\.com'/, 'сервер пускает вход и запись с app.skladgo.com');
+});

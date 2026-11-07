@@ -1,5 +1,5 @@
-# Сторож магазина: каждые 15 минут проверяет, что skladgo.com открывается и сервер
-# на Railway отвечает. Упала проверка — GitHub пришлёт письмо владельцу склада
+# Сторож магазина: каждые 15 минут проверяет, что склад (app.skladgo.com), страница о нём
+# (skladgo.com) и сервер на Railway отвечают. Упала проверка — GitHub пришлёт письмо владельцу склада
 # (Settings → Notifications → Actions: «Send notifications for failed workflows only»).
 # Только чтение: ни входа, ни записи в магазин.
 name: Uptime
@@ -21,7 +21,7 @@ jobs:
           fail=0
           check() {   # что проверяем, адрес, ожидаемый код, необязательная строка в ответе
             for try in 1 2 3; do
-              body=$(curl -s -o /tmp/b -w '%{http_code}' --max-time 20 "$2" || echo 000)
+              body=$(curl -sL -o /tmp/b -w '%{http_code}' --max-time 20 "$2" || echo 000)
               if [ "$body" = "$3" ] && { [ -z "$4" ] || grep -q "$4" /tmp/b; }; then
                 echo "ok    $1 ($2 → $body)"; return 0
               fi
@@ -29,9 +29,10 @@ jobs:
             done
             echo "::error title=$1::$2 ответил $body, ждали $3${4:+ и «$4»}"; fail=1
           }
-          check "Сайт магазина"         https://skladgo.com/                                200 'Sklad Go'
-          check "Прежний адрес"         https://skladgo.vercel.app/                         200 'Sklad Go'
-          check "Склад — на сервере"    https://skladgo.com/config.js                       200 "'skladgo.com': { api: '/api' }"
-          check "Сервер через сайт"     https://skladgo.com/api/me                          401
+          check "Склад"                 https://app.skladgo.com/                            200 'Sklad Go'
+          check "Прежний адрес склада"  https://skladgo.vercel.app/                         200 'Sklad Go'
+          check "Страница о складе"     https://skladgo.com/                                200 'support.js'
+          check "Склад — на сервере"    https://app.skladgo.com/config.js                   200 "'app.skladgo.com': { api: '/api' }"
+          check "Сервер через склад"    https://app.skladgo.com/api/me                      401
           check "Сервер на Railway"     https://sklad-go-production.up.railway.app/health   200 ok
           exit $fail

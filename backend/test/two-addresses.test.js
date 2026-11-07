@@ -108,3 +108,7 @@ test('вход, начатый до обновления сервера (ста�
   assert.equal(back.h.location, '/');
   assert.ok(с.jar.sg_s);
 });
+
+test('app.skladgo.com — настоящий магазин (склад переехал туда с корня skladgo.com)', () => {
+  assert.deepEqual(конфиг('app.skladgo.com'), { api: '/api' });
+});
