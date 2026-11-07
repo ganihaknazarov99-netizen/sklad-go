@@ -11,13 +11,15 @@ model: haiku
 
 | Адрес | Что это |
 |---|---|
-| `https://skladgo.com` | **магазин**, свой адрес — его рассылают людям |
+| `https://app.skladgo.com` | **магазин** — его рассылают продавцам |
+| `https://skladgo.com` | страница о складе: перенаправляет на `skladgo.com/about` (307) |
 | `https://skladgo.vercel.app` | тот же магазин, прежний адрес |
 | `https://sklad-go-gani26.vercel.app` | ссылка для друзей: регистрация и свой склад в телефоне |
 | `https://sklad-go-production.up.railway.app/health` | сервер магазина на Railway → `ok` |
 
-Магазин (первые два адреса) — файлы из корня на Vercel плюс сервер `server/` на
-Railway: `config.js` для них даёт `{ api: '/api' }`, а `/api/me` без входа отвечает 401.
+Магазин (`app.skladgo.com` и `skladgo.vercel.app`) — файлы из корня на Vercel плюс сервер
+`server/` на Railway: `config.js` для них даёт `{ api: '/api' }`, а `/api/me` без входа
+отвечает 401.
 
 ## Порядок
 

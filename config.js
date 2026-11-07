@@ -18,7 +18,11 @@
    Тайные ключи (secret, service_role, ключ Google) сюда не вписывать никогда. */
 (function () {
   var МАГАЗИН = {
-    // Свой адрес магазина (куплен 4 ноября 2026, Name.com). www Vercel перенаправляет сюда же
+    // Склад магазина. Сам skladgo.com с 7 ноября 2026 — страница о складе (skladgo.com/about,
+    // vercel.json → redirects); склад — на app.skladgo.com
+    'app.skladgo.com': { api: '/api' },
+    // Свой адрес магазина (куплен 4 ноября 2026 в Railway Domains). Оставлен для тех, кто успел
+    // открыть склад по нему; www Vercel перенаправляет сюда же
     'skladgo.com': { api: '/api' },
     'www.skladgo.com': { api: '/api' },
     // Прежний адрес магазина: работает как раньше, данные и вход те же

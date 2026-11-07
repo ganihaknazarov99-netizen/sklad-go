@@ -18,7 +18,7 @@ const { createApp } = require('./app');
 
 // Свой адрес магазина (куплен 4 ноября 2026). С него можно входить и писать всегда,
 // даже если в Railway → Variables его не вписали
-const АДРЕСА = ['https://skladgo.com', 'https://www.skladgo.com'];
+const АДРЕСА = ['https://app.skladgo.com', 'https://skladgo.com', 'https://www.skladgo.com'];
 
 (async () => {
   const env = process.env;
