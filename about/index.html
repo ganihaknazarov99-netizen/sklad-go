@@ -21,6 +21,8 @@ html,body{margin:0;background:#0a1628;scroll-behavior:smooth}
 a{color:#8a6a2b;text-decoration:none}
 a:hover{color:#e2c286}
 button{font-family:inherit}
+/* узкий телефон: переключатель языка наезжал на «Sklad Go» в шапке — остаётся только значок */
+@media (max-width:440px){nav a[href="#top"]>span{display:none}}
 @keyframes rise{from{opacity:0;transform:translateY(105%) skewY(8deg)}to{opacity:1;transform:none}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
 @keyframes tape{from{transform:translateY(0)}to{transform:translateY(-50%)}}
